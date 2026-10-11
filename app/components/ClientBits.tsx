@@ -29,24 +29,31 @@ export function Toast({ msg, onDone }: { msg: string | null; onDone: () => void 
 }
 
 /** Admin unlock dialog — explains why a token is needed instead of a bare browser prompt. */
-export function AdminDialog({ purpose, onClose, onToken }: { purpose: string; onClose: () => void; onToken: (t: string) => void }) {
+export function AdminDialog({ purpose, onClose, onToken, onGuest, guestNote }: { purpose: string; onClose: () => void; onToken: (t: string) => void; onGuest?: () => void; guestNote?: string }) {
   const [v, setV] = useState("");
   return (
     <div className="scrim" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h3 className="display">Admin access</h3>
         <p>{purpose}</p>
-        <ul>
-          <li>Reading digests is public. Only <b>actions</b> are protected.</li>
-          <li>A run spends Gemini quota and can email the team, so it needs the <span className="code">ADMIN_TOKEN</span> set in Vercel.</li>
-          <li>The Monday cron runs on its own with a separate secret.</li>
-        </ul>
-        <label htmlFor="tok">Admin token</label>
+        {onGuest && (
+          <div className="guest-box">
+            <div>
+              <b>Just exploring or grading?</b>
+              <p className="sub" style={{ margin: "2px 0 0" }}>{guestNote}</p>
+            </div>
+            <button className="btn primary" onClick={onGuest}>Continue as guest</button>
+          </div>
+        )}
+        <p className="sub" style={{ marginTop: 14 }}>
+          Admins have unlimited access. Actions are protected because they use the daily AI allowance and can email the team. Reading digests is always public.
+        </p>
+        <label htmlFor="tok">Admin token (optional)</label>
         <input id="tok" type="password" autoFocus value={v} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === "Enter" && v && onToken(v.trim())} placeholder="Paste ADMIN_TOKEN" />
         <p className="sub">Remembered only in this browser.</p>
         <div className="actions">
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn dark" disabled={!v} onClick={() => onToken(v.trim())}>Unlock</button>
+          <button className="btn dark" disabled={!v} onClick={() => onToken(v.trim())}>Unlock as admin</button>
         </div>
       </div>
     </div>
@@ -71,17 +78,17 @@ export function RunNowButton({ hero = false }: { hero?: boolean }) {
     try {
       const res = await fetch("/api/run", {
         method: "POST",
-        headers: { "x-admin-token": token, "Content-Type": "application/json" },
-        body: JSON.stringify({ sendEmail: send }),
+        headers: { ...(token ? { "x-admin-token": token } : {}), "Content-Type": "application/json" },
+        body: JSON.stringify({ sendEmail: token ? send : false }),
       });
       if (res.status === 401) {
         setToken("");
         setMsg("That token didn't match ADMIN_TOKEN.");
         return;
       }
-      setToken(token);
+      if (token) setToken(token);
       const j = await res.json();
-      if (!j.ok) setMsg(`Run failed: ${j.error}`);
+      if (!j.ok) setMsg(j.error?.startsWith("Guest") ? j.error : `Run failed: ${j.error}`);
       else {
         setMsg(`Done: ${j.call} to call · ${j.watch} to watch · ${j.policy} policy${j.emailed ? (j.emailed.error ? ` · email: ${j.emailed.error}` : " · email sent") : ""}`);
         router.refresh();
@@ -102,7 +109,15 @@ export function RunNowButton({ hero = false }: { hero?: boolean }) {
       <button className="btn primary" onClick={() => (getToken() ? run(getToken()) : setAsk(true))} disabled={busy}>
         {busy ? "Running…" : "▶ Run now"}
       </button>
-      {ask && <AdminDialog purpose="Run the full pipeline now on live data." onClose={() => setAsk(false)} onToken={run} />}
+      {ask && (
+        <AdminDialog
+          purpose="Run the full pipeline now on live data."
+          onClose={() => setAsk(false)}
+          onToken={run}
+          onGuest={() => run("")}
+          guestNote="Run the full live pipeline without a token. No email is sent; limited to a few runs per day."
+        />
+      )}
       {busy && (
         <div className="scrim">
           <div className="modal">
@@ -159,7 +174,7 @@ export function EmailDigestButton({ digestId }: { digestId: string }) {
     try {
       const res = await fetch("/api/send-email", {
         method: "POST",
-        headers: { "x-admin-token": token, "Content-Type": "application/json" },
+        headers: { ...(token ? { "x-admin-token": token } : {}), "Content-Type": "application/json" },
         body: JSON.stringify({ id: digestId, to: to.split(",").map((s) => s.trim()).filter(Boolean) }),
       });
       if (res.status === 401) {
@@ -167,7 +182,7 @@ export function EmailDigestButton({ digestId }: { digestId: string }) {
         setMsg("That token didn't match ADMIN_TOKEN.");
         return;
       }
-      setToken(token);
+      if (token) setToken(token);
       const j = await res.json();
       if (j.ok) {
         setOpen(false);
@@ -200,7 +215,15 @@ export function EmailDigestButton({ digestId }: { digestId: string }) {
           </div>
         </div>
       )}
-      {ask && <AdminDialog purpose="Send this digest by email." onClose={() => setAsk(false)} onToken={send} />}
+      {ask && (
+        <AdminDialog
+          purpose="Send this digest by email."
+          onClose={() => setAsk(false)}
+          onToken={send}
+          onGuest={() => send("")}
+          guestNote="Send it to one address of your choice without a token. Limited to a few emails per day."
+        />
+      )}
       <Toast msg={msg} onDone={() => setMsg(null)} />
     </>
   );

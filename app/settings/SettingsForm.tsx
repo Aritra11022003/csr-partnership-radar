@@ -15,6 +15,7 @@ export function SettingsForm() {
   const [saving, setSaving] = useState(false);
   const [watchText, setWatchText] = useState("");
   const [ask, setAsk] = useState(false);
+  const [showQ, setShowQ] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -38,6 +39,30 @@ export function SettingsForm() {
     const t = getToken();
     if (t) void doSave(t);
     else setAsk(true);
+  }
+
+  function currentConfig(): AppConfig | null {
+    if (!cfg) return null;
+    const c = structuredClone(cfg);
+    c.watchlist = watchText
+      .split("\n")
+      .map((l) => l.split("|").map((x) => x.trim()))
+      .filter((p) => p[0])
+      .map(([name, aliases = "", hq = "pan_india"]) => ({ name, aliases: list(aliases), hq_geo: hq || "pan_india" }));
+    return c;
+  }
+
+  /** Guest-friendly: shows the queries this configuration would produce, without saving anything. */
+  async function preview() {
+    setAsk(false);
+    const c = currentConfig();
+    if (!c) return;
+    const res = await fetch("/api/settings/preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(c) });
+    const j = await res.json();
+    if (!j.ok) return setMsg(`Invalid settings: ${j.error}`);
+    setQueries(j.queries);
+    setShowQ(true);
+    setMsg(`Preview only, not saved: the next run would use ${j.queries.length} search queries (listed below).`);
   }
 
   async function doSave(token: string) {
@@ -69,7 +94,10 @@ export function SettingsForm() {
     <div>
       <div className="row spread" style={{ margin: "10px 0 16px" }}>
         <span className="sub">Currently using: <b>{source === "store" ? "saved settings" : "seed defaults"}</b></span>
-        <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button>
+        <span className="row" style={{ gap: 8 }}>
+          <button className="btn" onClick={preview}>Preview effect (no save)</button>
+          <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button>
+        </span>
       </div>
 
       <div className="grid2">
@@ -187,7 +215,7 @@ export function SettingsForm() {
         <textarea style={{ minHeight: 220, fontFamily: "ui-monospace, Menlo, monospace", fontSize: 13 }} value={watchText} onChange={(e) => setWatchText(e.target.value)} />
       </div>
 
-      <details>
+      <details open={showQ} onToggle={(e) => setShowQ((e.target as HTMLDetailsElement).open)}>
         <summary>Search queries the next run will use ({queries.length})</summary>
         <ol className="sub" style={{ fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12 }}>
           {queries.map((q) => <li key={q}>{q}</li>)}
@@ -195,9 +223,18 @@ export function SettingsForm() {
       </details>
 
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
+        <button className="btn" onClick={preview}>Preview effect (no save)</button>
         <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button>
       </div>
-      {ask && <AdminDialog purpose="Save these settings. They change next run's search queries and scores." onClose={() => setAsk(false)} onToken={doSave} />}
+      {ask && (
+        <AdminDialog
+          purpose="Save these settings. They change next run's search queries and scores."
+          onClose={() => setAsk(false)}
+          onToken={doSave}
+          onGuest={preview}
+          guestNote="Guests can't save, but can preview exactly how these changes would alter the next run's searches."
+        />
+      )}
       <Toast msg={msg} onDone={() => setMsg(null)} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { isAdmin, isCron, unauthorized } from "@/lib/auth";
+import { GUEST_LIMITS, isGuest, takeGuestQuota } from "@/lib/guest";
 import { runPipeline } from "@/lib/run";
 import { getStore, KEYS } from "@/lib/store";
 import { isoWeekKey } from "@/lib/util";
@@ -30,8 +31,16 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  if (!isAdmin(req)) return unauthorized();
+  const admin = isAdmin(req);
+  // Guests (no token at all) may run without email, a few times a day. A wrong token is still 401 (G8).
+  if (!admin && !isGuest(req)) return unauthorized();
   const body = (await req.json().catch(() => ({}))) as { sendEmail?: boolean; forceEmail?: boolean; sample?: boolean };
+  if (!admin) {
+    const left = await takeGuestQuota("run");
+    if (left < 0) return Response.json({ ok: false, error: `Guest limit reached (${GUEST_LIMITS.run} runs per day). Try tomorrow or use the admin token.` }, { status: 429 });
+    body.sendEmail = false;
+    body.forceEmail = false;
+  }
   try {
     const { digest } = await runPipeline({ trigger: "manual", sendEmail: !!body.sendEmail, forceEmail: !!body.forceEmail, sample: !!body.sample });
     return Response.json({ ok: true, id: digest.id, call: digest.call.length, watch: digest.watch.length, policy: digest.policy.length, emailed: digest.emailed ?? null, warnings: digest.warnings });

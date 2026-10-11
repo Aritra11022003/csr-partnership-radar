@@ -1,4 +1,5 @@
 import { isAdmin, unauthorized } from "@/lib/auth";
+import { GUEST_LIMITS, isGuest, takeGuestQuota } from "@/lib/guest";
 import { loadConfig } from "@/lib/config";
 import { sendDigestEmail } from "@/lib/email/send";
 import { getDigest, getLatestDigest } from "@/lib/run";
@@ -15,8 +16,12 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
  * Still only ever sends to addresses the admin chose — never to companies (G20).
  */
 export async function POST(req: Request) {
-  if (!isAdmin(req)) return unauthorized();
+  const admin = isAdmin(req);
+  if (!admin && !isGuest(req)) return unauthorized();
   const body = (await req.json().catch(() => ({}))) as { id?: string; to?: string[] };
+  if (!admin && (body.to ?? []).filter((x) => String(x).trim()).length !== 1) {
+    return Response.json({ ok: false, error: "As a guest, enter exactly one email address." }, { status: 400 });
+  }
   const d = body.id ? await getDigest(body.id) : await getLatestDigest();
   if (!d) return Response.json({ ok: false, error: "digest not found" }, { status: 404 });
   const { config } = await loadConfig();
@@ -24,6 +29,9 @@ export async function POST(req: Request) {
   const bad = requested.filter((e) => !EMAIL.test(e));
   if (bad.length) return Response.json({ ok: false, error: `invalid email: ${bad.join(", ")}` }, { status: 400 });
   const to = (requested.length ? requested : config.org.recipients).slice(0, 10);
+  if (!admin && (await takeGuestQuota("email")) < 0) {
+    return Response.json({ ok: false, error: `Guest limit reached (${GUEST_LIMITS.email} emails per day).` }, { status: 429 });
+  }
   if (!to.length) return Response.json({ ok: false, error: "no recipients" }, { status: 400 });
   const emailed = await sendDigestEmail(d, { ...config, org: { ...config.org, recipients: to } });
   if (!emailed.error) {

@@ -14,13 +14,22 @@ afterEach(() => {
 });
 
 describe("G8 protected endpoints", () => {
-  it("/api/run without a token → 401", async () => {
+  it("/api/run: cron path without a token → 401; wrong tokens → 401", async () => {
     const { GET, POST } = await import("@/app/api/run/route");
     expect((await GET(new Request("http://x/api/run"))).status).toBe(401);
-    expect((await POST(new Request("http://x/api/run", { method: "POST" }))).status).toBe(401);
+    expect((await POST(new Request("http://x/api/run", { method: "POST", headers: { "x-admin-token": "nope" } }))).status).toBe(401);
     expect((await GET(new Request("http://x/api/run", { headers: { authorization: "Bearer wrong" } }))).status).toBe(401);
     // the admin token is not accepted as the cron secret's place on POST either way round with a wrong value
     expect((await POST(new Request("http://x/api/run", { method: "POST", headers: { "x-admin-token": "cron-secret-123456" } }))).status).toBe(401);
+  });
+  it("guests (no token) get a small daily allowance, then 429", async () => {
+    const { POST } = await import("@/app/api/run/route");
+    const { getStore } = await import("@/lib/store");
+    const { istDate } = await import("@/lib/util");
+    const { GUEST_LIMITS } = await import("@/lib/guest");
+    await getStore().set(`guest:run:${istDate()}`, GUEST_LIMITS.run);
+    const res = await POST(new Request("http://x/api/run", { method: "POST", body: JSON.stringify({ sendEmail: true }) }));
+    expect(res.status).toBe(429);
   });
   it("cron is idempotent per ISO week: a second firing is skipped", async () => {
     const { GET } = await import("@/app/api/run/route");
@@ -29,6 +38,16 @@ describe("G8 protected endpoints", () => {
     await getStore().set(KEYS.runLock(isoWeekKey()), { at: "earlier" });
     const res = await GET(new Request("http://x/api/run", { headers: { authorization: "Bearer cron-secret-123456" } }));
     expect(await res.json()).toMatchObject({ skipped: true });
+  });
+  it("/api/settings/preview is public and saves nothing", async () => {
+    const { POST } = await import("@/app/api/settings/preview/route");
+    const { GET } = await import("@/app/api/settings/route");
+    const { seedAppConfig } = await import("@/lib/config");
+    const c = seedAppConfig();
+    c.sectors.push({ id: "women_livelihoods", label: "Women Livelihoods", enabled: true, keywords: ["self-help groups"] });
+    const j = await (await POST(new Request("http://x", { method: "POST", body: JSON.stringify(c) }))).json();
+    expect(j.queries.join(" ")).toMatch(/self-help groups/);
+    expect((await (await GET()).json()).source).toBe("seed");
   });
   it("/api/settings PUT without a token → 401; invalid body → 400", async () => {
     const { PUT } = await import("@/app/api/settings/route");
@@ -70,9 +89,10 @@ describe("G7 secrets safe", () => {
 });
 
 describe("admin email resend", () => {
-  it("requires the admin token", async () => {
+  it("wrong token → 401; guests must name exactly one address", async () => {
     const { POST } = await import("@/app/api/send-email/route");
-    expect((await POST(new Request("http://x/api/send-email", { method: "POST", body: "{}" }))).status).toBe(401);
+    expect((await POST(new Request("http://x/api/send-email", { method: "POST", headers: { "x-admin-token": "nope" }, body: "{}" }))).status).toBe(401);
+    expect((await POST(new Request("http://x/api/send-email", { method: "POST", body: JSON.stringify({ to: ["a@b.co", "c@d.co"] }) }))).status).toBe(400);
   });
   it("sends a stored digest to chosen recipients via Resend, ignoring the weekly lock", async () => {
     vi.stubEnv("RESEND_API_KEY", "re_test");
@@ -85,6 +105,10 @@ describe("admin email resend", () => {
     const res = await POST(new Request("http://x/api/send-email", { method: "POST", headers: { "x-admin-token": "admin-token-123456" }, body: JSON.stringify({ id: digest.id, to: ["team@ngo.org"] }) }));
     expect(res.status).toBe(200);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).to).toEqual(["team@ngo.org"]);
+    // guest with one address works too, without the token
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "em_10" }), { status: 200 }));
+    const guest = await POST(new Request("http://x/api/send-email", { method: "POST", body: JSON.stringify({ id: digest.id, to: ["grader@uni.edu"] }) }));
+    expect(guest.status).toBe(200);
     const bad = await POST(new Request("http://x/api/send-email", { method: "POST", headers: { "x-admin-token": "admin-token-123456" }, body: JSON.stringify({ id: digest.id, to: ["not-an-email"] }) }));
     expect(bad.status).toBe(400);
     vi.unstubAllGlobals();
