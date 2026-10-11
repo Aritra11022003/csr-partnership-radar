@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { getLatestDigest } from "@/lib/run";
+import { getLatestDigest, latestSampleId } from "@/lib/run";
 import { DigestView } from "./components/DigestView";
 import { RunNowButton } from "./components/ClientBits";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const d = await getLatestDigest().catch(() => null);
-  if (d) return <DigestView d={d} showRun />;
+  const [d, sampleId] = await Promise.all([getLatestDigest().catch(() => null), latestSampleId().catch(() => null)]);
+  if (d) return <DigestView d={d} showRun sampleId={d.call.length === 0 ? sampleId : null} />;
   return (
     <section className="hero" style={{ minHeight: 420 }}>
       <div className="wrap" style={{ textAlign: "center", paddingTop: 30 }}>

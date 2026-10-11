@@ -9,7 +9,8 @@ export const maxDuration = 300; // G18
 
 /**
  * GET  — Vercel Cron (Mon 01:30 UTC = 07:00 IST), Authorization: Bearer CRON_SECRET. Runs once per ISO week (G19).
- * POST — manual "Run now" from the dashboard, x-admin-token: ADMIN_TOKEN. Body: { sendEmail?: boolean, forceEmail?: boolean }.
+ * POST — manual "Run now" from the dashboard, x-admin-token: ADMIN_TOKEN. Body: { sendEmail?, forceEmail?, sample? }.
+ *        sample=true builds a separate DEMO digest from the fixtures (no email, never replaces the real week).
  */
 export async function GET(req: Request) {
   if (!isCron(req) && !isAdmin(req)) return unauthorized();
@@ -30,9 +31,9 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   if (!isAdmin(req)) return unauthorized();
-  const body = (await req.json().catch(() => ({}))) as { sendEmail?: boolean; forceEmail?: boolean };
+  const body = (await req.json().catch(() => ({}))) as { sendEmail?: boolean; forceEmail?: boolean; sample?: boolean };
   try {
-    const { digest } = await runPipeline({ trigger: "manual", sendEmail: !!body.sendEmail, forceEmail: !!body.forceEmail });
+    const { digest } = await runPipeline({ trigger: "manual", sendEmail: !!body.sendEmail, forceEmail: !!body.forceEmail, sample: !!body.sample });
     return Response.json({ ok: true, id: digest.id, call: digest.call.length, watch: digest.watch.length, policy: digest.policy.length, emailed: digest.emailed ?? null, warnings: digest.warnings });
   } catch (e) {
     return Response.json({ ok: false, error: (e as Error).message }, { status: 500 });

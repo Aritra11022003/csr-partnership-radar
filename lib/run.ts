@@ -25,6 +25,9 @@ export interface RunOptions {
   sendEmail?: boolean;
   forceEmail?: boolean;
   demo?: boolean;
+  /** Sample run: fixtures only, stored as a separate "<date>-sample" DEMO digest; never replaces the real
+   *  weekly digest, never emails, never touches seen-URL memory. Lets reviewers see the CALL path. */
+  sample?: boolean;
   /** Skip live fetching (tests). */
   offline?: boolean;
   config?: AppConfig;
@@ -43,7 +46,9 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
   const now = opts.now ?? new Date();
   const store = getStore();
   const persist = opts.persist ?? true;
-  const demo = opts.demo ?? isDemoMode();
+  const sample = !!opts.sample;
+  const demo = sample || (opts.demo ?? isDemoMode());
+  if (sample) opts = { ...opts, offline: true, sendEmail: false };
   const weekId = isoWeekKey(now);
   const warnings: string[] = [];
 
@@ -75,7 +80,7 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
 
   // Seen-URL memory: drop items already surfaced in a *previous* week's digest.
   let fresh = deduped.kept;
-  if (persist) {
+  if (persist && !sample) {
     try {
       const seen = await store.mget<{ week: string }>(fresh.map((a) => KEYS.seen(sha1(a.canonicalUrl))));
       const before = fresh.length;
@@ -235,7 +240,7 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
 
   const okSources = sourceStatus.filter((s) => s.ok && s.count > 0).length;
   const digest: Digest = {
-    id: istDate(now),
+    id: sample ? `${istDate(now)}-sample` : istDate(now),
     week: weekId,
     date: istDate(now),
     generatedAt: now.toISOString(),
@@ -271,11 +276,11 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
   if (persist) {
     try {
       await store.set(KEYS.digest(digest.id), digest);
-      await store.set(KEYS.latest, digest.id);
+      if (!sample) await store.set(KEYS.latest, digest.id);
       const index = (await store.get<string[]>(KEYS.digestIndex)) ?? [];
       if (!index.includes(digest.id)) await store.set(KEYS.digestIndex, [digest.id, ...index].slice(0, 104));
       const surfaced = [...digest.call, ...digest.watch, ...digest.policy];
-      await store.msetWithTtl(
+      if (!sample) await store.msetWithTtl(
         surfaced.map((i) => [KEYS.seen(sha1(candidates.find((c) => c.url === i.url)?.canonicalUrl ?? i.url)), { week: weekId }]),
         SEEN_TTL,
       );
@@ -311,6 +316,10 @@ export async function getLatestDigest(): Promise<Digest | null> {
 
 export async function getDigest(id: string): Promise<Digest | null> {
   return getStore().get<Digest>(KEYS.digest(id));
+}
+
+export async function latestSampleId(): Promise<string | null> {
+  return (await listDigests()).find((id) => id.endsWith("-sample")) ?? null;
 }
 
 export async function listDigests(): Promise<string[]> {

@@ -159,7 +159,7 @@ const count = (items: DigestItem[], f: (i: DigestItem) => string | null) => {
   return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
 };
 
-export function DigestBoard({ d, sigs, showRun }: { d: Digest; sigs: Sigs; showRun: boolean }) {
+export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: Sigs; showRun: boolean; sampleId?: string | null }) {
   const [signal, setSignal] = useState("ALL");
   const [sector, setSector] = useState("ALL");
   const [q, setQ] = useState("");
@@ -200,7 +200,7 @@ export function DigestBoard({ d, sigs, showRun }: { d: Digest; sigs: Sigs; showR
             </div>
             {showRun && <RunNowButton hero />}
           </div>
-          {d.demo && <div className="banner demo">DEMO MODE: synthetic fixtures with fictional companies, tagged DEMO, are mixed in. Never used in production.</div>}
+          {d.demo && <div className="banner demo">{d.id.endsWith("-sample") ? "SAMPLE DIGEST: built only from synthetic test fixtures (fictional companies) to show every path, including CALL. Not real news. The real weekly digest is on the home page." : "DEMO MODE: synthetic fixtures with fictional companies, tagged DEMO, are mixed in. Never used in production."}</div>}
           <p className="summary-hero">{d.week_summary}</p>
           <div className="tiles">
             <div className="tile call"><div className="n">{d.call.length}</div><div className="l">Call this week</div></div>
@@ -240,7 +240,12 @@ export function DigestBoard({ d, sigs, showRun }: { d: Digest; sigs: Sigs; showR
               <>
                 <h2>🟢 Call this week <span className="count">{call.length}</span></h2>
                 {call.length ? call.map((i) => <ItemCard key={i.id} d={d} i={i} sigs={sigs} />) : (
-                  <div className="panel muted">Nothing reached CALL this week{signal !== "ALL" || sector !== "ALL" || q ? " for this filter" : ""}. A CALL needs a strong, verified signal in a focus sector, ideally in Pune or Maharashtra. Check the watch list below.</div>
+                  <div className="panel muted">
+                    Nothing reached CALL this week{signal !== "ALL" || sector !== "ALL" || q ? " for this filter" : ""}. A CALL needs a strong, verified signal in a focus sector, ideally in Pune or Maharashtra. Check the watch list below.
+                    {sampleId && (
+                      <> {" "}<a href={`/digest/${sampleId}`}>See what a CALL looks like in the sample digest (DEMO data) →</a></>
+                    )}
+                  </div>
                 )}
                 {watch.length > 0 && (
                   <>

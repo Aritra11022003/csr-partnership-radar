@@ -140,3 +140,17 @@ describe("G9 tool constraint", () => {
     expect(execSync("node scripts/check-no-anthropic.mjs").toString()).toMatch(/^OK/);
   });
 });
+
+describe("sample run (admin-only DEMO digest)", () => {
+  it("is stored separately, never becomes the latest digest, never emails", async () => {
+    const { getStore, KEYS } = await import("@/lib/store");
+    await demoRun({ demo: false, sample: false });
+    const real = await getStore().get<string>(KEYS.latest);
+    const { digest } = await demoRun({ sample: true, sendEmail: true });
+    expect(digest.id).toMatch(/-sample$/);
+    expect(digest.demo).toBe(true);
+    expect(digest.emailed).toBeUndefined();
+    expect(digest.call.length).toBeGreaterThan(0);
+    expect(await getStore().get<string>(KEYS.latest)).toBe(real);
+  });
+});
