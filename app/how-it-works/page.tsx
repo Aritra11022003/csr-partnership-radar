@@ -1,82 +1,148 @@
 import Link from "next/link";
+import { loadConfig } from "@/lib/config";
+import { latestSampleId } from "@/lib/run";
+import { IconHandshake, IconLandmark, IconRocket, IconTrend } from "../components/Icons";
+import { VerdictSimulator } from "./VerdictSimulator";
 
-const LANES: Record<string, { label: string; color: string; icon: string }> = {
-  user: { label: "User", color: "#3b5bdb", icon: "👤" },
-  app: { label: "App logic", color: "#7048e8", icon: "⚙️" },
-  ai: { label: "AI · Gemini Flash", color: "#e0a800", icon: "✦" },
-  db: { label: "Database · Neon", color: "#0c8599", icon: "🗄" },
-  ext: { label: "External API", color: "#2f9e44", icon: "🌐" },
-  human: { label: "Human decision", color: "#d6336c", icon: "☎" },
-};
-const LANE_OF = ["user", "app", "db", "ext", "app", "ai", "app", "ai", "app", "db", "ext", "human"];
+export const dynamic = "force-dynamic";
 
-const STEPS: [string, string, string][] = [
-  ["1", "Ananya sets her focus", "Sectors, geographies, watchlist and weights in /settings — saved to Postgres, validated with zod."],
-  ["2", "Cron: Monday 07:00 IST", "Vercel Cron `30 1 * * 1` calls /api/run with CRON_SECRET. A per-ISO-week lock stops double runs; “Run now” uses ADMIN_TOKEN."],
-  ["3", "Load config + memory", "Saved settings (fallback: seed files), seen-URL hashes (30 days) and feedback history."],
-  ["4", "Pull the last 7 days (live)", "Google News RSS (one query per sector × signal, plus geo, policy and watchlist queries), GDELT DOC 2.0, India CSR + The CSR Journal feeds, PIB, optional NewsAPI — in parallel, 10 s timeout each, a dead source is skipped and logged."],
-  ["5", "Clean & filter (code)", "Normalise, IST 7-day window, dedupe (canonical URL, title Jaccard ≥ 0.8, same company + signal), keyword pre-filter, deterministic India check, cap 120. Google News links are resolved to the publisher and the public meta description becomes the snippet."],
-  ["6", "Classify + extract (Gemini Flash)", "Batches of 10, JSON mode + responseSchema, temperature 0.2. Article text goes in as JSON data. zod validation → one retry with an error hint → rule-based fallback."],
-  ["7", "Verify & score (code)", "Evidence must be a verbatim substring of the source. Deterministic score = signal + sector + geo tier + recency + watchlist + source credibility − unverified penalty ± feedback. Hard rules: confidence < 0.6, unverified evidence, or injection → never CALL."],
-  ["8", "Write the digest (Gemini Flash)", "Headline, 2–3 line context, why now, pitch angle. It receives only verified facts and cannot change verdicts, scores, amounts, dates or URLs — code re-attaches those."],
-  ["9", "Output check (code)", "Rejects any writer text with unknown names, numbers or amounts not in the source, URLs, emails or phone numbers → falls back to a deterministic template for that item."],
-  ["10", "Save the week", "Digest, items, skipped list with reasons, source health, seen URLs and run log in Neon Postgres."],
-  ["11", "Monday email", "Resend → Ananya only. Call / Watch / Policy Watch; a quiet week sends a short “no strong signals” note."],
-  ["12", "Ananya decides", "👍 / 👎 / 📞 Called links (HMAC-signed) feed a bounded per-company score nudge next week. The system never contacts companies."],
-];
+export default async function Guide() {
+  const { config } = await loadConfig();
+  const sc = config.scoring;
+  const sampleId = await latestSampleId().catch(() => null);
+  const sectors = config.sectors.filter((s) => s.enabled).map((s) => s.label);
+  const geos = [...config.geographies].sort((a, b) => a.tier - b.tier);
 
-const GUARDS: [string, string][] = [
-  ["G1 No fabricated facts", "Writer only rephrases given fields; output checker rejects unknown names/numbers → template."],
-  ["G2 Evidence required", "Exact-substring check; unverified → −25 and never CALL."],
-  ["G3 No guessed numbers", "Amounts/beneficiaries/deadlines null unless stated; writer can’t mention an unstated amount."],
-  ["G4 Partner-search precision", "Prompt rule + code guard: no explicit seeking language → NEW_INITIATIVE."],
-  ["G5 Every item has a source", "Invalid URLs dropped at ingest and again at output."],
-  ["G6 Prompt injection", "Text passed as JSON data; regex pre-scan + model flag → capped at WATCH."],
-  ["G7 Secrets safe", "Server-only env vars; logs redacted; /api/health exposes booleans only."],
-  ["G8 Protected endpoints", "/api/run needs CRON_SECRET or ADMIN_TOKEN; settings save needs ADMIN_TOKEN."],
-  ["G9 Gemini only", "No Anthropic SDK — CI script fails the build if one appears."],
-  ["G10–G14 Deterministic correctness", "IST date window, 3-way dedupe, India + sector relevance, zod + retry + fallback, confidence gate."],
-  ["G15–G19 Reliability & cost", "allSettled sources, quiet-week email, ≤120 items in batches of 10, maxDuration 300 s, once-per-week lock."],
-  ["G20–G23 Human & ethical", "Informs Ananya only, company-level info only, sources + AI disclaimer on every item, DEMO fixtures tagged and isolated."],
-];
-
-export default function How() {
   return (
-    <div className="wrap page">
-      <h1 className="display">How it works</h1>
-      <p className="sub">AI reads meaning, code checks facts, Ananya makes the call. Full write-up in the <a href="https://github.com/Aritra11022003/csr-partnership-radar" target="_blank" rel="noreferrer">README</a> and <span className="code">COMPONENTS_MAP.md</span>.</p>
-      <h2>Components map</h2>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className="mapimg" src="/components_map.svg" alt="Components map: Ananya → settings → cron → config → live data → clean → Gemini classify → verify & score → Gemini write → output check → store → email → feedback" />
-      <h2>Pipeline, step by step</h2>
-      <div className="legend">
-        {Object.values(LANES).map((l) => (
-          <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>
-        ))}
+    <div className="wrap page guide">
+      <div className="eyebrow">Rule guide</div>
+      <h1 className="display">How the radar works for you</h1>
+      <p className="lead">
+        Every <b>Monday at 7:00 am</b> you get one short email covering the past 7 days of CSR news in{" "}
+        <b>{sectors.join(", ")}</b>. Each item answers one question: <b>is this worth a call this week?</b>{" "}
+        You make the call. The radar never contacts anyone for you.
+      </p>
+
+      <h2>Your Monday in three steps</h2>
+      <div className="steps3">
+        <div className="s3"><span>1</span><h4>Read the “Call this week” list</h4><p>These are the strongest, freshest openings. Start your outreach here.</p></div>
+        <div className="s3"><span>2</span><h4>Skim Watch and Policy</h4><p>Watch items aren’t urgent yet but may become calls. Policy items change how funders spend.</p></div>
+        <div className="s3"><span>3</span><h4>Tap feedback</h4><p>👍 Useful, 👎 Not useful, or 📞 Called. Next week’s ranking learns from it.</p></div>
       </div>
-      <div className="flow">
-        {STEPS.map(([n, t, d], k) => {
-          const lane = LANES[LANE_OF[k]];
-          return (
-            <div className="fstep" key={n} style={{ borderTop: `3px solid ${lane.color}` }}>
-              <span className="n">{n.padStart(2, "0")}</span>
-              <div className="ic" style={{ background: lane.color }} aria-hidden>{lane.icon}</div>
-              <div className="lane" style={{ color: lane.color }}>{lane.label}</div>
-              <h4>{t}</h4>
-              <p>{d}</p>
-            </div>
-          );
-        })}
+
+      <h2>The four signals it looks for</h2>
+      <div className="sig4">
+        <div className="sigc" style={{ ["--c" as string]: "#138a52" }}>
+          <div className="ic"><IconHandshake size={20} /></div>
+          <h4>Partner search</h4>
+          <p className="when">A company is openly looking for NGO or implementation partners: “inviting proposals”, “RFP”, “expression of interest”, “empanelment”.</p>
+          <p className="act"><b>What to do:</b> the hottest signal. Reach out before partners are chosen and note any deadline.</p>
+        </div>
+        <div className="sigc" style={{ ["--c" as string]: "#3b4fd6" }}>
+          <div className="ic"><IconRocket size={20} /></div>
+          <h4>New initiative</h4>
+          <p className="when">A new CSR programme, foundation drive or MoU in one of your sectors was just announced.</p>
+          <p className="act"><b>What to do:</b> they’re actively spending. Pitch where your programme fits theirs.</p>
+        </div>
+        <div className="sigc" style={{ ["--c" as string]: "#c27c00" }}>
+          <div className="ic"><IconTrend size={20} /></div>
+          <h4>Budget up</h4>
+          <p className="when">Press or annual-report coverage shows a company raising its CSR spend or earmarking new money.</p>
+          <p className="act"><b>What to do:</b> a good moment for a relationship call before next year’s plan is fixed.</p>
+        </div>
+        <div className="sigc" style={{ ["--c" as string]: "#6a5ae0" }}>
+          <div className="ic"><IconLandmark size={20} /></div>
+          <h4>Policy change</h4>
+          <p className="when">A government or regulatory change to CSR rules (Ministry of Corporate Affairs, Schedule VII, unspent CSR funds).</p>
+          <p className="act"><b>What to do:</b> use it as a reason to check in with current and prospective funders.</p>
+        </div>
       </div>
-      <h2>Guardrails (each one tested)</h2>
+      <p className="note">
+        <b>“Partners with X” is not a partner search.</b> It means a partner has already been chosen, so it’s treated as a new initiative.
+      </p>
+
+      <h2>What each verdict means</h2>
+      <div className="verd">
+        <div className="vrow call"><b>CALL</b><span>Score {sc.verdict_thresholds.CALL}+ with a clear, quoted source. Worth a call this week.</span></div>
+        <div className="vrow watch"><b>WATCH</b><span>Score {sc.verdict_thresholds.WATCH}–{sc.verdict_thresholds.CALL - 1}, or anything the radar isn’t fully sure about. Keep an eye on it; no action needed yet.</span></div>
+        <div className="vrow policy"><b>POLICY</b><span>A rule change, always shown in its own section whatever its score.</span></div>
+        <div className="vrow skip"><b>SKIPPED</b><span>Below {sc.verdict_thresholds.WATCH}, outside your sectors, outside India, or not CSR at all (e.g. share-price news). Listed at the bottom of each digest so you can check.</span></div>
+      </div>
+
+      <h2>How an item earns its score</h2>
+      <p className="muted">Points add up to a score out of about 100. These are your current settings; change them anytime in <Link href="/settings">Settings</Link>.</p>
+      <div className="panel scroll">
+        <table className="ptable">
+          <tbody>
+            <tr><td><b>Type of signal</b></td><td>Partner search <b>+{sc.signal_weight.PARTNER_SEARCH}</b> · New initiative <b>+{sc.signal_weight.NEW_INITIATIVE}</b> · Budget up <b>+{sc.signal_weight.ALLOCATION_UP}</b> · Policy <b>+{sc.signal_weight.POLICY}</b></td></tr>
+            <tr><td><b>Fits your sectors</b></td><td>Main sector <b>+{sc.sector_match.primary}</b> · Related sector <b>+{sc.sector_match.secondary}</b></td></tr>
+            <tr><td><b>Location</b></td><td>{geos.map((g, k) => <span key={g.id}>{k ? " · " : ""}{g.label} <b>+{sc.geo_weight[String(g.tier)] ?? 0}</b></span>)} · Not stated <b>+{sc.geo_weight.unknown ?? 0}</b></td></tr>
+            <tr><td><b>How recent</b></td><td>{Object.entries(sc.recency).map(([k, v], n) => <span key={k}>{n ? " · " : ""}{k.replace("d", " days")} <b>+{v}</b></span>)}</td></tr>
+            <tr><td><b>Company on your watchlist</b></td><td><b>+{sc.watchlist_bonus}</b></td></tr>
+            <tr><td><b>Source</b></td><td>Major business paper or government site <b>+{sc.source_credibility.high}</b> · CSR trade site <b>+{sc.source_credibility.medium}</b></td></tr>
+            <tr><td><b>Quote not found word-for-word</b></td><td><b>{sc.unverified_evidence_penalty}</b> and it can never be a CALL</td></tr>
+            <tr><td><b>Your feedback</b></td><td>Companies you mark 👍 or 📞 get a small boost next time; 👎 a small drop (at most ±5)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2>Hard rules (these override the score)</h2>
       <div className="gcards">
-        {GUARDS.map(([g, d]) => (
-          <div className="gcard" key={g}><b>🛡 {g}</b><span>{d}</span></div>
-        ))}
+        <div className="gcard"><b>📌 No quote, no call</b><span>Every item shows a sentence copied word-for-word from the source. If it can’t be matched exactly, the item is capped at WATCH.</span></div>
+        <div className="gcard"><b>🔍 Unsure means WATCH</b><span>If the article is short or vague, the item can’t be a CALL however high it scores.</span></div>
+        <div className="gcard"><b>🚩 Suspicious text means WATCH</b><span>If an article seems written to game the system, it’s flagged and capped at WATCH.</span></div>
+        <div className="gcard"><b>🤝 Partner searches always show</b><span>A confirmed partner search in your sectors is always at least WATCH, never silently dropped.</span></div>
+        <div className="gcard"><b>🔢 No guessed numbers</b><span>Amounts, beneficiary counts and deadlines appear only if the article states them.</span></div>
+        <div className="gcard"><b>🗓 Last 7 days only</b><span>Older news is dropped, and stories already shown in an earlier week aren’t repeated.</span></div>
+        <div className="gcard"><b>🔗 Always a source</b><span>Every item links to the original article and shows its date, so you can verify before you call.</span></div>
+        <div className="gcard"><b>📭 Quiet weeks are OK</b><span>If nothing qualifies, you get a short “no strong signals” note, not filler.</span></div>
       </div>
-      <h2>Out of scope (the cut)</h2>
-      <p className="muted">No auto-outreach to companies. No paywalled full-text scraping (only public headlines, feed snippets and meta descriptions). No personal contact harvesting.</p>
-      <p><Link href="/">← Back to the latest digest</Link></p>
+
+      <h2>Try it: how would an item be rated?</h2>
+      <p className="muted">Pick the details of a news item and see the score and verdict the radar would give it, using your current settings.</p>
+      <VerdictSimulator scoring={sc} geos={geos.map((g) => ({ label: g.label, tier: g.tier }))} />
+
+      <h2>Reading an item card</h2>
+      <div className="panel">
+        <ul className="anatomy">
+          <li><b>Headline</b> with the company name first</li>
+          <li><b>Tags:</b> sector · location · amount, people reached and deadline (only if stated)</li>
+          <li><b>Context:</b> what was announced and why it fits your work</li>
+          <li><b>Why now:</b> the timing reason, e.g. a deadline, a fresh launch or partners not yet chosen</li>
+          <li><b>Angle:</b> a suggested pitch hook, not a promise</li>
+          <li><b>Quote:</b> the exact sentence from the source that backs it up</li>
+          <li><b>Source link and date</b>, plus other outlets that reported it</li>
+          <li><b>Score ring</b> out of 100, and feedback buttons</li>
+        </ul>
+        {sampleId && (
+          <p style={{ marginBottom: 0 }}>
+            <Link href={`/digest/${sampleId}`}>See a worked example with CALL items (sample data, fictional companies) →</Link>
+          </p>
+        )}
+      </div>
+
+      <h2>Making it yours</h2>
+      <div className="gcards">
+        <div className="gcard"><b>Sectors & keywords</b><span>Add a new focus area (e.g. women’s livelihoods) or switch one off as your programmes grow.</span></div>
+        <div className="gcard"><b>Places</b><span>Change the priority order, e.g. move Maharashtra up, or add a new state you now work in.</span></div>
+        <div className="gcard"><b>Watchlist</b><span>Add companies you’re courting. Their news gets a small boost.</span></div>
+        <div className="gcard"><b>Thresholds & recipients</b><span>Make CALL stricter or looser, and choose who gets the Monday email.</span></div>
+      </div>
+      <p className="muted">Changes apply from the next run. Saving needs the admin token so only your team can change them.</p>
+
+      <h2>What the radar will never do</h2>
+      <ul className="never">
+        <li>Contact companies, send outreach or reply on your behalf</li>
+        <li>Collect personal phone numbers or emails; it works at company level only</li>
+        <li>Read paywalled articles; it uses public headlines and summaries</li>
+        <li>Invent amounts, names or deadlines</li>
+      </ul>
+
+      <h2>Questions</h2>
+      <details><summary>Why are there zero CALL items this week?</summary><p className="muted">A CALL needs a strong signal in your sectors, ideally near Pune, quoted clearly from a recent article. In weeks without one the radar says so honestly rather than inflating a weaker item. Check the Watch list.</p></details>
+      <details><summary>Can I trust the summaries?</summary><p className="muted">They’re AI-written, but each item carries an exact quote and a link to the original. Read the quote; if it doesn’t support the headline, mark 👎. Always verify before outreach.</p></details>
+      <details><summary>Why did I get the same company twice?</summary><p className="muted">It shouldn’t happen within a week: duplicate stories are merged and listed as extra sources. Across weeks, a story is only repeated if there is genuinely new coverage.</p></details>
+      <details><summary>What does “Run now” do?</summary><p className="muted">It builds a fresh digest immediately instead of waiting for Monday. It’s admin-only because each run uses a limited daily AI allowance and can send the email.</p></details>
     </div>
   );
 }
