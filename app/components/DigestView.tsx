@@ -111,6 +111,8 @@ export function DigestView({ d }: { d: Digest }) {
             Covering {fmtDate(d.windowStart)} – {fmtDate(d.windowEnd)} · generated {new Date(d.generatedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST ·
             writer: {d.writer === "gemini" ? `Gemini (${d.model})` : "template"}
             {d.emailed && (d.emailed.error ? ` · email: ${d.emailed.error}` : ` · emailed to ${d.emailed.to.length} recipient(s)`)}
+            {" · "}
+            <a href={`/api/email-preview?id=${d.id}`} target="_blank" rel="noopener noreferrer">view as email ↗</a>
           </div>
         </div>
       </div>

@@ -34,7 +34,7 @@ export default function How() {
   return (
     <>
       <h1>How it works</h1>
-      <p className="sub">AI reads meaning, code checks facts, Ananya makes the call. Full write-up in the <a href="https://github.com" target="_blank" rel="noreferrer">README</a> and <span className="code">COMPONENTS_MAP.md</span>.</p>
+      <p className="sub">AI reads meaning, code checks facts, Ananya makes the call. Full write-up in the <a href="https://github.com/Aritra11022003/csr-partnership-radar" target="_blank" rel="noreferrer">README</a> and <span className="code">COMPONENTS_MAP.md</span>.</p>
       <h2>Components map</h2>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="mapimg" src="/components_map.svg" alt="Components map: Ananya → settings → cron → config → live data → clean → Gemini classify → verify & score → Gemini write → output check → store → email → feedback" />

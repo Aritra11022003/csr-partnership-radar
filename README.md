@@ -3,7 +3,8 @@
 **A weekly AI digest of CSR partnership opportunities, built for a Pune education and skilling NGO.**
 Every Monday at 07:00 IST it scans the last 7 days of live Indian news. It finds companies that are **seeking NGO partners**, **launching new CSR programmes**, **raising CSR budgets**, or affected by **CSR policy changes** in education, skill development, digital literacy and youth employment. It then sends Ananya (Head of Corporate Partnerships) a short email built around one decision: *is this worth a call this week?*
 
-- **Live app:** `<VERCEL_URL>`
+- **Live app:** https://csr-partnership-radar.vercel.app
+- **Repository:** https://github.com/Aritra11022003/csr-partnership-radar
 - **Components map:** [`COMPONENTS_MAP.md`](COMPONENTS_MAP.md) · [`docs/components_map.svg`](docs/components_map.svg)
 - **AI:** Google **Gemini Flash** only (`@google/genai`). No other LLM SDK is used (enforced in CI).
 
@@ -131,7 +132,7 @@ scripts/                   run-local, fetch-live, check-no-anthropic, check-secr
 | G23 | Demo separation | fixtures only when `DEMO_MODE=true`, tagged DEMO, filtered otherwise | `pipeline.test.ts` |
 
 ```
-npm test               # 53 tests
+npm test               # 58 tests
 npm run typecheck
 npm run check:no-anthropic
 ```
@@ -174,6 +175,7 @@ sectors and keywords (add, disable, edit) · geographies, tiers and aliases · w
 - **The output checker is deliberately strict.** If Gemini adds a proper noun or number that isn't in the source, that item falls back to a plainer template. Accuracy beats polish.
 - **Company names come from the model** (verified against the source text only through the evidence quote). Same-company dedupe uses a normalised two-word key, so rare collisions are possible.
 - **Feedback learning** is a small, bounded per-company nudge, not a trained model.
+- **Gemini free tier is about 20 requests per model per day.** A normal run uses about 6 (≈5 classify batches + 1 writer call). If a model's daily quota runs out (or it returns 404 or 503), the client moves to the next **Flash** model (`3.8-flash → 3.6-flash → 3.5-flash → flash-latest → 3.5-flash-lite`). At most 3 calls run at once, and per-minute 429s wait for the advertised delay. If every Flash model is exhausted, the rule-based classifier and the template writer still produce a (more conservative) digest.
 - **Resend sandbox sender** only delivers to the account owner until a domain is verified.
 
 ## Ethics
