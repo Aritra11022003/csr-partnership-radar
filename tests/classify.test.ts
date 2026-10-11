@@ -139,3 +139,17 @@ describe("G12 relevance", () => {
     expect(s.verdict).toBe("SKIP");
   });
 });
+
+describe("Gemini error handling (quota-aware Flash fallback)", async () => {
+  const { classifyGeminiError } = await import("@/lib/gemini");
+  it("daily free-tier quota → move to the next Flash model", () => {
+    expect(classifyGeminiError('{"code":429,"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}').kind).toBe("daily_quota");
+  });
+  it("per-minute limit → wait the advertised delay", () => {
+    expect(classifyGeminiError('{"code":429,"message":"quota","retryDelay":"12s"}')).toEqual({ kind: "rate_limit", retryAfterMs: 12000 });
+  });
+  it("retired model → unavailable; overload → retry", () => {
+    expect(classifyGeminiError('{"code":404,"message":"no longer available"}').kind).toBe("model_unavailable");
+    expect(classifyGeminiError('{"code":503,"message":"high demand"}').kind).toBe("overloaded");
+  });
+});

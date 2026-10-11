@@ -143,7 +143,9 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
 
   // 6. classify
   const llm = opts.classifyLlm === undefined ? undefined : opts.classifyLlm;
+  const tc = Date.now();
   const { classifications, stats } = await classifyAll(candidates, config, llm);
+  log(`classify took ${((Date.now() - tc) / 1000).toFixed(1)}s`);
   if (!geminiConfigured() && llm === undefined) warnings.push("GEMINI_API_KEY not set: rule-based classifier used (conservative, never CALL).");
   if (stats.errors.length) warnings.push(...stats.errors.slice(0, 5).map((e) => `classifier: ${e}`));
   log(`classified: ${stats.byLlm} by Gemini, ${stats.byRules} by rules, ${stats.retries} retries`);
@@ -204,7 +206,9 @@ export async function runPipeline(opts: RunOptions): Promise<{ digest: Digest; s
       });
 
   // 8–9. write + check
+  const tw = Date.now();
   const written = await writeDigest(selected, config, opts.digestLlm === undefined ? undefined : opts.digestLlm);
+  log(`digest writer took ${((Date.now() - tw) / 1000).toFixed(1)}s`);
   warnings.push(...written.warnings);
 
   const toItem = (s: ScoredItem): DigestItem => ({

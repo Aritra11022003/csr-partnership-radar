@@ -145,14 +145,14 @@ export async function classifyBatch(batch: Article[], config: AppConfig, llm: Ll
   });
 }
 
-/** Classify all candidates in batches of `llm_batch_size`, at most 4 batches in flight. */
+/** Classify all candidates in batches of `llm_batch_size`, at most 6 batches in flight. */
 export async function classifyAll(articles: Article[], config: AppConfig, llm: LlmFn | null = geminiConfigured() ? geminiClassifyLlm : null) {
   const stats: ClassifyStats = { byLlm: 0, byRules: 0, retries: 0, errors: [] };
   const batches = chunk(articles, Math.max(1, Math.min(config.limits.llm_batch_size, 20)));
   const out: Classification[][] = new Array(batches.length);
   let next = 0;
   await Promise.all(
-    Array.from({ length: Math.min(4, batches.length) }, async () => {
+    Array.from({ length: Math.min(6, batches.length) }, async () => {
       while (next < batches.length) {
         const i = next++;
         out[i] = await classifyBatch(batches[i], config, llm, stats);

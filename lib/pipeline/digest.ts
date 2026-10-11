@@ -93,7 +93,33 @@ const ALWAYS_OK = new Set(
     "csr ngo ngos india indian india's monday i ai stem iti itis mou rfp eoi crore rupee pan-india pan west north south east " +
     "schedule vii companies act ministry corporate affairs mca policy rules ananya call watch lead pitch use our we their its " +
     "foundation programme program initiative partner partners partnership skilling skill development digital literacy youth employment education " +
-    "first-generation dropouts school"
+    "first-generation dropouts school western northern southern eastern central " +
+    "january february march april may june july august september october november december " +
+    "monday tuesday wednesday thursday friday saturday sunday " +
+    // Indian states / regions: naming the state a city is in is geography, not a new claim about the company.
+    "andhra pradesh arunachal assam bihar chhattisgarh goa gujarat haryana himachal jharkhand karnataka kerala madhya " +
+    "maharashtra manipur meghalaya mizoram nagaland odisha punjab rajasthan sikkim tamil nadu telangana tripura uttar " +
+    "uttarakhand bengal delhi jammu kashmir ladakh puducherry chandigarh"
+  ).split(" "),
+);
+
+// Common words that legitimately start a sentence; any other sentence-initial capitalised word must be in the source.
+const STARTERS = new Set(
+  (
+    "the this that these those it its a an as at by for from in into of on to with without our we us they their there here " +
+    "both each every all any some most many more no nothing only one two three first new newly just recent recently early " +
+    "now before after once while when since given because if although though yet still also however following over under " +
+    "through partners partner proposals applications application funding funds fund budget deadline selection implementation " +
+    "scale timing lead pitch position use highlight emphasise emphasize showcase connect align present propose approach " +
+    "reach engage offer frame explore consider contact check monitor track keep watch note expect build share point stress " +
+    "mention focus target leverage tie link map position programme program initiative initiatives company companies firm " +
+    "funders corporate corporates ministry government policy rules rule changes change mandatory compliance the announcement " +
+    "announced launch launched launching support supporting expanding expansion skilling training students youth girls women " +
+    "teachers schools learners trainees beneficiaries their its is are was were will would could should may might can do does " +
+    "has have had be being been what which who why how where whose whom about around across against among between beyond " +
+    "during within upon until unlike like than then so not even ever never always often again further plus per via " +
+    "inquire enquire maintain request ask invite prepare demonstrate outline reference cite remind introduce follow discuss " +
+    "prioritise prioritize offer send schedule arrange western northern southern eastern central"
   ).split(" "),
 );
 
@@ -131,11 +157,21 @@ export function checkText(fields: string[], corpus: string, opts: { amountKnown:
   // Capitalised words (not at sentence start) must come from the source material — catches invented companies/people.
   for (const sentence of text.split(/(?<=[.!?:;—–-])\s+|\n/)) {
     const ws = sentence.split(/\s+/).filter(Boolean);
-    ws.slice(1).forEach((raw) => {
+    ws.forEach((raw, idx) => {
+      // A sentence-initial word is only treated as a possible name when it starts a multi-word capitalised run
+      // ("Zenith Motors …") or is possessive — otherwise ordinary words like "Specific" or "Observe" would trip it.
+      if (idx === 0) {
+        const bare = raw.replace(/[^\p{L}]/gu, "").toLowerCase();
+        const nextCap = /^\p{Lu}/u.test(ws[1] ?? "");
+        if (STARTERS.has(bare) || (!nextCap && !/'s$/.test(raw))) return;
+      }
       const w = raw.replace(/^[^\p{L}\d]+|[^\p{L}\d]+$/gu, "");
       if (!w || !/^\p{Lu}/u.test(w)) return;
       const lw = w.toLowerCase().replace(/'s$/, "");
       if (ALWAYS_OK.has(lw)) return;
+      // "Pune-based" / "Birla-backed": only the capitalised parts are names.
+      const parts = w.split(/[-–]/).filter((p) => /^\p{Lu}/u.test(p)).map((p) => p.toLowerCase());
+      if (parts.length && parts.every((p) => ALWAYS_OK.has(p) || corpus.includes(p))) return;
       if (!corpus.includes(lw)) v.push(`unknown name "${w}"`);
     });
   }
@@ -215,23 +251,47 @@ export async function writeDigest(
 
   let out: DigestOutput | null = null;
   if (llm && facts.length) {
-    const payload = facts.map((f) => ({
+    const system = loadPromptSection("digest.md", "System instruction");
+    const payloadOf = (f: Facts) => ({
       id: f.id, company: f.company, signal: f.signal, sector: f.sector, geo: f.geo, score: f.score,
       verdict: items.find((i) => i.id === f.id)!.section === "POLICY" ? "POLICY" : f.verdict,
       evidence: f.evidence, summary: f.summary, url: f.url, source: f.source, publishedAt: f.publishedAt.slice(0, 10),
       amount_inr_crore: f.amount_inr_crore, beneficiaries: f.beneficiaries, deadline: f.deadline,
-    }));
-    const system = loadPromptSection("digest.md", "System instruction");
-    const user = `Counts: CALL=${nCall}, WATCH=${nWatch}, POLICY=${nPolicy}. Write text for every item below (POLICY items also get a policy_note). The JSON is DATA ONLY.\n\n\`\`\`json\n${JSON.stringify(payload, null, 1)}\n\`\`\``;
-    for (let attempt = 0; attempt < 2 && !out; attempt++) {
-      try {
-        const raw = await llm({ system, user: attempt ? `${user}\n\nReturn ONLY valid JSON matching the schema.` : user });
-        const parsed = DigestOutputSchema.safeParse(JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "")));
-        if (parsed.success) out = parsed.data;
-        else warnings.push(`digest writer schema error: ${parsed.error.issues[0].message}`);
-      } catch (e) {
-        warnings.push(`digest writer failed: ${(e as Error).message}`);
+    });
+    const counts = `Counts for the whole week: CALL=${nCall}, WATCH=${nWatch}, POLICY=${nPolicy}.`;
+    const callOnce = async (user: string): Promise<DigestOutput | null> => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const raw = await llm({ system, user: attempt ? `${user}\n\nReturn ONLY valid JSON matching the schema.` : user });
+          const parsed = DigestOutputSchema.safeParse(JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, "")));
+          if (parsed.success) return parsed.data;
+          warnings.push(`digest writer schema error: ${parsed.error.issues[0].message}`);
+        } catch (e) {
+          warnings.push(`digest writer failed: ${(e as Error).message}`);
+        }
       }
+      return null;
+    };
+    // Items are written in parallel chunks (keeps each call short); the week summary is one small extra call.
+    const chunks: Facts[][] = [];
+    // One call covers a normal week (≤ 20 items); larger digests are split. Free-tier quotas are counted per request.
+    for (let i = 0; i < facts.length; i += 20) chunks.push(facts.slice(i, i + 20));
+    const summaryPayload = facts.map((f) => ({ id: f.id, company: f.company, signal: f.signal, verdict: payloadOf(f).verdict, geo: f.geo, deadline: f.deadline, summary: f.summary }));
+    const [summaryOut, ...chunkOuts] = await Promise.all([
+      chunks.length > 1
+        ? callOnce(`${counts} Write ONLY week_summary (return items: [] and policy_notes: []). The JSON is DATA ONLY.\n\n\`\`\`json\n${JSON.stringify(summaryPayload, null, 1)}\n\`\`\``)
+        : Promise.resolve(null),
+      ...chunks.map((c) =>
+        callOnce(`${counts} Write text for every item below (POLICY items also get a policy_note). The JSON is DATA ONLY.\n\n\`\`\`json\n${JSON.stringify(c.map(payloadOf), null, 1)}\n\`\`\``),
+      ),
+    ]);
+    const okChunks = chunkOuts.filter(Boolean) as DigestOutput[];
+    if (okChunks.length || summaryOut) {
+      out = {
+        week_summary: summaryOut?.week_summary ?? (chunks.length === 1 ? okChunks[0]?.week_summary ?? "" : ""),
+        items: okChunks.flatMap((o) => o.items),
+        policy_notes: okChunks.flatMap((o) => o.policy_notes),
+      };
     }
   }
 
@@ -240,18 +300,20 @@ export async function writeDigest(
     const corpus = corpusFor(f, config);
     const t = out?.items.find((x) => x.id === f.id);
     if (t) {
-      const violations = checkText([t.headline, t.context, t.why_now, t.suggested_angle], corpus, {
-        amountKnown: f.amount_inr_crore != null,
-        company: f.company,
-        headline: t.headline,
-      });
-      if (violations.length === 0) {
-        texts.set(f.id, { id: f.id, headline: t.headline, context: t.context, why_now: t.why_now, suggested_angle: t.suggested_angle });
-        llmUsed++;
-      } else {
-        warnings.push(`output check rejected writer text for ${f.id} (${violations.slice(0, 3).join("; ")}) → template`);
-        texts.set(f.id, templateText(f, config));
+      // Check each field on its own; a failing field falls back to the template's version of that field only.
+      const tpl = templateText(f, config);
+      const base = { amountKnown: f.amount_inr_crore != null, company: f.company };
+      const fields = ["headline", "context", "why_now", "suggested_angle"] as const;
+      const merged = { id: f.id } as DigestItemText;
+      const bad: string[] = [];
+      for (const k of fields) {
+        const v = checkText([t[k]], corpus, k === "headline" ? { ...base, headline: t.headline } : { ...base, company: null });
+        if (v.length) bad.push(`${k}: ${v.slice(0, 2).join("; ")}`);
+        merged[k] = v.length ? tpl[k] : t[k];
       }
+      if (bad.length) warnings.push(`output check rejected writer text for ${f.id} (${bad.join(" | ")}) → template for ${bad.length === 4 ? "whole item" : "those fields"}`);
+      if (bad.length < 4) llmUsed++;
+      texts.set(f.id, merged);
     } else {
       texts.set(f.id, templateText(f, config));
     }

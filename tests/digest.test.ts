@@ -45,8 +45,10 @@ describe("G1 no fabricated facts in the digest", () => {
     );
     const w = await writeDigest(items, config(), writer);
     expect(w.warnings.join(" ")).toMatch(/output check rejected writer text for fx-01.*Zenith/);
-    expect(w.texts.get("fx-01")).toEqual(templateText(toDigestFacts(items[0]), config()));
+    const tpl = templateText(toDigestFacts(items[0]), config());
+    expect(w.texts.get("fx-01")!.context).toBe(tpl.context); // offending field replaced by the template
     expect(w.texts.get("fx-01")!.context).not.toMatch(/Zenith/);
+    expect(w.texts.get("fx-01")!.headline).toBe("Vardhan Auto Components seeks NGO partners"); // clean fields kept
   });
 
   it("rejects invented contacts, URLs, unstated amounts and numbers (G3, G21)", async () => {
@@ -60,6 +62,21 @@ describe("G1 no fabricated facts in the digest", () => {
     expect(checkText(["Deccan Logistics will spend ₹12 crore on ITIs."], corpus, opts)).toContain("mentions an amount that was not stated");
     expect(checkText(["The programme will reach 4,500 trainees."], corpus, opts).join()).toMatch(/number "4,500"/);
     expect(checkText(["Deccan Logistics will support ITI upgrades in Nashik."], corpus, { ...opts, headline: "Deccan Logistics backs ITI upgrades", company: "Deccan Logistics" })).toEqual([]);
+  });
+
+  it("does not flag months, Indian states or hyphenated known words", async () => {
+    const [item] = await scoredFixtures(["fx-12"]);
+    const corpus = corpusFor(toDigestFacts(item), config());
+    const v = checkText(["Announced in October, the Nashik-based ITI upgrades fit our Maharashtra-focused skilling work in Uttar Pradesh and Pune."], corpus, { amountKnown: false, company: null });
+    expect(v).toEqual([]);
+  });
+
+  it("an item whose every field fails falls back entirely to the template", async () => {
+    const items = await scoredFixtures(["fx-01"]);
+    const writer = vi.fn().mockResolvedValue(JSON.stringify({ week_summary: "x", items: [{ id: "fx-01", headline: "Acme Corp hires", context: "Call Ravi at 9876543210.", why_now: "Zenith Motors set the deadline.", suggested_angle: "Pitch Globex." }], policy_notes: [] }));
+    const w = await writeDigest(items, config(), writer);
+    expect(w.texts.get("fx-01")).toEqual(templateText(toDigestFacts(items[0]), config()));
+    expect(w.writer).toBe("template");
   });
 
   it("falls back fully to the template when the writer returns garbage twice", async () => {

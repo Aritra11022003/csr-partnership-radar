@@ -25,6 +25,7 @@ RULES:
 5. `confidence` runs from 0 to 1. Use < 0.6 when the text is short, vague, or ambiguous.
 6. Pick ONE primary sector. List others in `secondary_sectors`.
 7. `company` is the corporate name as written. Use `null` for policy items.
+8. The NGO wants CORPORATE CSR money. Programmes run by schools, universities, NGOs, education institutes' own trusts, or government departments are `IRRELEVANT` unless the text says a company or corporate foundation is funding them through CSR.
 
 Return ONLY JSON that matches the schema. Do not add commentary.
 
