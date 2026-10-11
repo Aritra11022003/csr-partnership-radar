@@ -1,6 +1,7 @@
 import { configuredModel, geminiConfigured } from "@/lib/gemini";
 import { getStore } from "@/lib/store";
 import { isDemoMode } from "@/lib/sources/demo";
+import { emailProvider } from "@/lib/email/send";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function GET() {
     gemini: geminiConfigured(),
     model: configuredModel(),
     store: getStore().kind,
-    email: !!process.env.RESEND_API_KEY,
+    email: emailProvider(),
     cronSecret: !!process.env.CRON_SECRET,
     adminToken: !!process.env.ADMIN_TOKEN,
     demoMode: isDemoMode(),

@@ -161,7 +161,7 @@ export function chunk<T>(arr: T[], n: number): T[][] {
 /** Strip anything that looks like a secret before logging (G7). */
 export function redact(s: string): string {
   let out = s;
-  for (const k of ["GEMINI_API_KEY", "RESEND_API_KEY", "DATABASE_URL", "CRON_SECRET", "ADMIN_TOKEN", "NEWSAPI_KEY"]) {
+  for (const k of ["GEMINI_API_KEY", "RESEND_API_KEY", "DATABASE_URL", "SMTP_PASS", "BREVO_API_KEY", "CRON_SECRET", "ADMIN_TOKEN", "NEWSAPI_KEY"]) {
     const v = process.env[k];
     if (v && v.length > 6) out = out.split(v).join(`[${k}]`);
   }
