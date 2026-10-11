@@ -1,0 +1,83 @@
+{
+  "org": {
+    "name": "Ananya's NGO (Pune)",
+    "focus_beneficiaries": ["school dropouts", "first-generation job seekers", "youth 16-25"],
+    "recipients": ["ananya@example.org"]
+  },
+  "lookback_days": 7,
+  "sectors": [
+    {
+      "id": "education",
+      "label": "Education",
+      "enabled": true,
+      "keywords": ["education", "school", "learning outcomes", "scholarship", "foundational literacy", "STEM", "remedial education", "school dropout"]
+    },
+    {
+      "id": "skill_development",
+      "label": "Skill Development",
+      "enabled": true,
+      "keywords": ["skill development", "skilling", "vocational training", "apprenticeship", "employability", "ITI", "upskilling", "livelihood training"]
+    },
+    {
+      "id": "digital_literacy",
+      "label": "Digital Literacy",
+      "enabled": true,
+      "keywords": ["digital literacy", "digital skilling", "computer literacy", "coding for", "AI skilling", "digital inclusion"]
+    },
+    {
+      "id": "youth_employment",
+      "label": "Youth Employment",
+      "enabled": true,
+      "keywords": ["youth employment", "job readiness", "placement", "first-generation", "employability", "youth livelihoods"]
+    }
+  ],
+  "csr_anchor_terms": ["CSR", "corporate social responsibility", "foundation", "Schedule VII", "social impact"],
+  "signal_keywords": {
+    "PARTNER_SEARCH": ["implementation partner", "implementing partner", "NGO partners", "invites proposals", "call for proposals", "RFP", "expression of interest", "seeking partners", "empanelment"],
+    "NEW_INITIATIVE": ["launches", "announces", "unveils", "flagship", "MoU", "partnership with", "rolls out", "inaugurates"],
+    "ALLOCATION_UP": ["CSR spend", "crore", "earmarked", "allocated", "increase", "annual report", "CSR budget", "commitment"],
+    "POLICY": ["MCA", "Ministry of Corporate Affairs", "Companies Act", "Schedule VII", "CSR rules", "amendment", "CSR-1", "unspent CSR", "notification"]
+  },
+  "geographies": [
+    { "id": "pune", "label": "Pune", "tier": 1, "aliases": ["Pune", "Pimpri", "Chinchwad", "Hinjewadi", "Chakan"] },
+    { "id": "maharashtra", "label": "Maharashtra", "tier": 2, "aliases": ["Maharashtra", "Mumbai", "Nashik", "Nagpur", "Aurangabad", "Chhatrapati Sambhajinagar", "Thane"] },
+    { "id": "west_india", "label": "West India", "tier": 3, "aliases": ["Gujarat", "Goa", "Madhya Pradesh"] },
+    { "id": "pan_india", "label": "Pan-India", "tier": 4, "aliases": ["India", "pan-India", "nationwide", "across states"] }
+  ],
+  "scoring": {
+    "signal_weight": { "PARTNER_SEARCH": 40, "NEW_INITIATIVE": 28, "ALLOCATION_UP": 22, "POLICY": 15 },
+    "sector_match": { "primary": 20, "secondary": 10 },
+    "geo_weight": { "1": 20, "2": 14, "3": 8, "4": 6, "unknown": 2 },
+    "recency": { "0-2d": 10, "3-5d": 6, "6-7d": 3 },
+    "watchlist_bonus": 5,
+    "source_credibility": { "high": 5, "medium": 2, "low": 0 },
+    "unverified_evidence_penalty": -25,
+    "verdict_thresholds": { "CALL": 65, "WATCH": 40 },
+    "rules": [
+      "PARTNER_SEARCH with verified evidence in a focus sector is always at least WATCH.",
+      "POLICY items go to the Policy Watch section regardless of score.",
+      "Any item with confidence < 0.6 cannot be CALL."
+    ]
+  },
+  "source_credibility": {
+    "high": ["economictimes.indiatimes.com", "livemint.com", "business-standard.com", "thehindubusinessline.com", "pib.gov.in", "mca.gov.in", "moneycontrol.com", "financialexpress.com"],
+    "medium": ["indiacsr.in", "csrbox.org", "thecsrjournal.in", "yourstory.com", "thebetterindia.com", "punemirror.com"],
+    "low_default": true
+  },
+  "sector_feeds": [
+    { "name": "India CSR", "url": "https://indiacsr.in/feed/", "verify": true },
+    { "name": "The CSR Journal", "url": "https://thecsrjournal.in/feed/", "verify": true }
+  ],
+  "policy_queries": [
+    "CSR rules amendment Ministry of Corporate Affairs",
+    "Schedule VII Companies Act amendment",
+    "site:pib.gov.in corporate social responsibility",
+    "unspent CSR fund rules"
+  ],
+  "limits": {
+    "max_queries": 40,
+    "max_items_to_llm": 120,
+    "llm_batch_size": 10,
+    "max_digest_items": 15
+  }
+}

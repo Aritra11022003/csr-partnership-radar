@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "csr-radar", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "-p", "4517"], "port": 4517 }
+  ]
+}

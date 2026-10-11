@@ -1,0 +1,29 @@
+{
+  "_note": "Starter watchlist for query expansion and a small score bonus. Names only. Do NOT hardcode CSR amounts or contacts, because those must come from live sources. Ananya can edit this list in /settings.",
+  "companies": [
+    { "name": "Persistent Systems", "aliases": ["Persistent Foundation"], "hq_geo": "pune" },
+    { "name": "KPIT Technologies", "aliases": ["KPIT"], "hq_geo": "pune" },
+    { "name": "Bajaj Auto", "aliases": ["Bajaj Group", "Jamnalal Bajaj Foundation"], "hq_geo": "pune" },
+    { "name": "Bajaj Finserv", "aliases": [], "hq_geo": "pune" },
+    { "name": "Thermax", "aliases": ["Thermax Foundation"], "hq_geo": "pune" },
+    { "name": "Forbes Marshall", "aliases": [], "hq_geo": "pune" },
+    { "name": "Cummins India", "aliases": ["Cummins India Foundation"], "hq_geo": "pune" },
+    { "name": "Kirloskar", "aliases": ["Kirloskar Oil Engines", "Kirloskar Brothers"], "hq_geo": "pune" },
+    { "name": "Tata Motors", "aliases": [], "hq_geo": "maharashtra" },
+    { "name": "Mahindra & Mahindra", "aliases": ["Mahindra Group", "K.C. Mahindra Education Trust"], "hq_geo": "maharashtra" },
+    { "name": "Tech Mahindra", "aliases": ["Tech Mahindra Foundation"], "hq_geo": "maharashtra" },
+    { "name": "Tata Consultancy Services", "aliases": ["TCS", "TCS Foundation"], "hq_geo": "maharashtra" },
+    { "name": "HDFC Bank", "aliases": ["Parivartan"], "hq_geo": "maharashtra" },
+    { "name": "Kotak Mahindra Bank", "aliases": ["Kotak Education Foundation"], "hq_geo": "maharashtra" },
+    { "name": "Axis Bank", "aliases": ["Axis Bank Foundation"], "hq_geo": "maharashtra" },
+    { "name": "Larsen & Toubro", "aliases": ["L&T"], "hq_geo": "maharashtra" },
+    { "name": "Reliance Industries", "aliases": ["Reliance Foundation"], "hq_geo": "maharashtra" },
+    { "name": "Infosys", "aliases": ["Infosys Foundation"], "hq_geo": "pan_india" },
+    { "name": "Wipro", "aliases": ["Wipro Foundation"], "hq_geo": "pan_india" },
+    { "name": "HCLTech", "aliases": ["HCL Foundation"], "hq_geo": "pan_india" },
+    { "name": "Accenture India", "aliases": [], "hq_geo": "pan_india" },
+    { "name": "Cognizant", "aliases": ["Cognizant Foundation"], "hq_geo": "pan_india" },
+    { "name": "Capgemini India", "aliases": [], "hq_geo": "pan_india" },
+    { "name": "Siemens India", "aliases": [], "hq_geo": "pan_india" }
+  ]
+}

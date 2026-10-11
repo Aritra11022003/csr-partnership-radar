@@ -1,0 +1,20 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # dummy values so the secret-leak check has something to look for
+      GEMINI_API_KEY: ci-dummy-gemini-key-123456
+      ADMIN_TOKEN: ci-dummy-admin-token-123456
+      CRON_SECRET: ci-dummy-cron-secret-123456
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run check:no-anthropic   # G9
+      - run: npm run typecheck
+      - run: npm test                     # guardrail tests G1–G23
+      - run: npm run build
+      - run: node scripts/check-secrets.mjs   # G7
