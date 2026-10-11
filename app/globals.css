@@ -333,3 +333,5 @@ h2 .sh.policy { background: #a99bff; box-shadow: 0 0 0 4px var(--policy-bg); }
 .sim-parts { font-size: 13px; }
 .sim-parts td { padding: 4px 6px; }
 .sim-parts td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pill-btn { cursor: pointer; font: inherit; font-size: 12px; background: rgba(79,208,143,0.16); border-color: rgba(79,208,143,0.45); color: #c9f5de; }
+.pill-btn:hover { background: rgba(79,208,143,0.26); }

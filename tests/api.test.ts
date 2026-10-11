@@ -68,3 +68,25 @@ describe("G7 secrets safe", () => {
     expect(txt).not.toMatch(/AIzaSy|cron-secret|admin-token/);
   });
 });
+
+describe("admin email resend", () => {
+  it("requires the admin token", async () => {
+    const { POST } = await import("@/app/api/send-email/route");
+    expect((await POST(new Request("http://x/api/send-email", { method: "POST", body: "{}" }))).status).toBe(401);
+  });
+  it("sends a stored digest to chosen recipients via Resend, ignoring the weekly lock", async () => {
+    vi.stubEnv("RESEND_API_KEY", "re_test");
+    const { runPipeline } = await import("@/lib/run");
+    const { seedAppConfig } = await import("@/lib/config");
+    const { digest } = await runPipeline({ trigger: "test", demo: true, offline: true, config: seedAppConfig(), classifyLlm: null, digestLlm: null, log: () => {} });
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "em_9" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { POST } = await import("@/app/api/send-email/route");
+    const res = await POST(new Request("http://x/api/send-email", { method: "POST", headers: { "x-admin-token": "admin-token-123456" }, body: JSON.stringify({ id: digest.id, to: ["team@ngo.org"] }) }));
+    expect(res.status).toBe(200);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).to).toEqual(["team@ngo.org"]);
+    const bad = await POST(new Request("http://x/api/send-email", { method: "POST", headers: { "x-admin-token": "admin-token-123456" }, body: JSON.stringify({ id: digest.id, to: ["not-an-email"] }) }));
+    expect(bad.status).toBe(400);
+    vi.unstubAllGlobals();
+  });
+});

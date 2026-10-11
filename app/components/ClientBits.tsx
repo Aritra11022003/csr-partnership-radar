@@ -136,3 +136,72 @@ export function FeedbackButtons({ d, i, sigs }: { d: string; i: string; sigs: Re
     </div>
   );
 }
+
+/** Admin: email an existing digest to the configured recipients or custom addresses. */
+export function EmailDigestButton({ digestId }: { digestId: string }) {
+  const [open, setOpen] = useState(false);
+  const [ask, setAsk] = useState(false);
+  const [to, setTo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function openComposer() {
+    setOpen(true);
+    if (!to) {
+      const j = await fetch("/api/settings").then((r) => r.json()).catch(() => null);
+      if (j?.config?.org?.recipients) setTo(j.config.org.recipients.join(", "));
+    }
+  }
+
+  async function send(token: string) {
+    setAsk(false);
+    setBusy(true);
+    try {
+      const res = await fetch("/api/send-email", {
+        method: "POST",
+        headers: { "x-admin-token": token, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: digestId, to: to.split(",").map((s) => s.trim()).filter(Boolean) }),
+      });
+      if (res.status === 401) {
+        setToken("");
+        setMsg("That token didn't match ADMIN_TOKEN.");
+        return;
+      }
+      setToken(token);
+      const j = await res.json();
+      if (j.ok) {
+        setOpen(false);
+        setMsg(`Email sent to ${j.emailed.to.join(", ")}`);
+      } else setMsg(`Not sent: ${j.error ?? j.emailed?.error}`);
+    } catch (e) {
+      setMsg(`Not sent: ${(e as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button className="pill pill-btn" onClick={openComposer}>✉ Email this digest</button>
+      {open && (
+        <div className="scrim" role="dialog" aria-modal="true" onClick={() => !busy && setOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 className="display">Email this digest</h3>
+            <p>Sends this digest exactly as shown, with the same layout as the Monday email. Nothing is re-run and no AI quota is used.</p>
+            <label htmlFor="rcpt">Recipients (comma-separated, up to 10)</label>
+            <input id="rcpt" type="text" value={to} onChange={(e) => setTo(e.target.value)} placeholder="ananya@yourngo.org, team@yourngo.org" />
+            <p className="sub">Only your team. The radar never emails companies.</p>
+            <div className="actions">
+              <button className="btn" onClick={() => setOpen(false)} disabled={busy}>Cancel</button>
+              <button className="btn dark" disabled={busy || !to.trim()} onClick={() => (getToken() ? send(getToken()) : setAsk(true))}>
+                {busy ? "Sending…" : "Send email"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {ask && <AdminDialog purpose="Send this digest by email." onClose={() => setAsk(false)} onToken={send} />}
+      <Toast msg={msg} onDone={() => setMsg(null)} />
+    </>
+  );
+}
