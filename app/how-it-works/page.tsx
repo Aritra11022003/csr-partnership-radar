@@ -1,5 +1,15 @@
 import Link from "next/link";
 
+const LANES: Record<string, { label: string; color: string; icon: string }> = {
+  user: { label: "User", color: "#3b5bdb", icon: "👤" },
+  app: { label: "App logic", color: "#7048e8", icon: "⚙️" },
+  ai: { label: "AI · Gemini Flash", color: "#e0a800", icon: "✦" },
+  db: { label: "Database · Neon", color: "#0c8599", icon: "🗄" },
+  ext: { label: "External API", color: "#2f9e44", icon: "🌐" },
+  human: { label: "Human decision", color: "#d6336c", icon: "☎" },
+};
+const LANE_OF = ["user", "app", "db", "ext", "app", "ai", "app", "ai", "app", "db", "ext", "human"];
+
 const STEPS: [string, string, string][] = [
   ["1", "Ananya sets her focus", "Sectors, geographies, watchlist and weights in /settings — saved to Postgres, validated with zod."],
   ["2", "Cron: Monday 07:00 IST", "Vercel Cron `30 1 * * 1` calls /api/run with CRON_SECRET. A per-ISO-week lock stops double runs; “Run now” uses ADMIN_TOKEN."],
@@ -33,31 +43,36 @@ const GUARDS: [string, string][] = [
 export default function How() {
   return (
     <div className="wrap page">
-      <h1>How it works</h1>
+      <h1 className="display">How it works</h1>
       <p className="sub">AI reads meaning, code checks facts, Ananya makes the call. Full write-up in the <a href="https://github.com/Aritra11022003/csr-partnership-radar" target="_blank" rel="noreferrer">README</a> and <span className="code">COMPONENTS_MAP.md</span>.</p>
       <h2>Components map</h2>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="mapimg" src="/components_map.svg" alt="Components map: Ananya → settings → cron → config → live data → clean → Gemini classify → verify & score → Gemini write → output check → store → email → feedback" />
-      <h2>Pipeline</h2>
-      <div className="panel scroll">
-        <table>
-          <thead><tr><th style={{ width: 30 }}>#</th><th style={{ width: 220 }}>Step</th><th>What happens</th></tr></thead>
-          <tbody>
-            {STEPS.map(([n, t, d]) => (
-              <tr key={n}><td><b>{n}</b></td><td><b>{t}</b></td><td className="muted">{d}</td></tr>
-            ))}
-          </tbody>
-        </table>
+      <h2>Pipeline, step by step</h2>
+      <div className="legend">
+        {Object.values(LANES).map((l) => (
+          <span key={l.label}><i style={{ background: l.color }} />{l.label}</span>
+        ))}
+      </div>
+      <div className="flow">
+        {STEPS.map(([n, t, d], k) => {
+          const lane = LANES[LANE_OF[k]];
+          return (
+            <div className="fstep" key={n} style={{ borderTop: `3px solid ${lane.color}` }}>
+              <span className="n">{n.padStart(2, "0")}</span>
+              <div className="ic" style={{ background: lane.color }} aria-hidden>{lane.icon}</div>
+              <div className="lane" style={{ color: lane.color }}>{lane.label}</div>
+              <h4>{t}</h4>
+              <p>{d}</p>
+            </div>
+          );
+        })}
       </div>
       <h2>Guardrails (each one tested)</h2>
-      <div className="panel scroll">
-        <table>
-          <tbody>
-            {GUARDS.map(([g, d]) => (
-              <tr key={g}><td style={{ width: 240 }}><b>{g}</b></td><td className="muted">{d}</td></tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="gcards">
+        {GUARDS.map(([g, d]) => (
+          <div className="gcard" key={g}><b>🛡 {g}</b><span>{d}</span></div>
+        ))}
       </div>
       <h2>Out of scope (the cut)</h2>
       <p className="muted">No auto-outreach to companies. No paywalled full-text scraping (only public headlines, feed snippets and meta descriptions). No personal contact harvesting.</p>

@@ -2,6 +2,8 @@
 import { useMemo, useState } from "react";
 import type { Digest, DigestItem } from "@/lib/types";
 import { FeedbackButtons, RunNowButton } from "./ClientBits";
+import { RadarChart } from "./RadarChart";
+import { IconClock, IconPin, IconQuote, IconRupee, IconUsers, SIGNAL_ICON } from "./Icons";
 
 type Sigs = Record<string, Record<"up" | "down" | "called", string>>;
 type Policy = DigestItem & { note: string };
@@ -94,22 +96,25 @@ function ItemCard({ d, i, sigs, compact }: { d: Digest; i: DigestItem | Policy; 
   const isPolicy = i.signal === "POLICY";
   const verdict = isPolicy ? "POLICY" : i.verdict;
   return (
-    <article className={`card ${compact ? "compact" : ""}`}>
+    <article id={`item-${i.id}`} className={`card v-${verdict.toLowerCase()} ${compact ? "compact" : ""}`}>
       <div className="mono" style={{ background: isPolicy ? "#6a5ae0" : m.color }} aria-hidden>{isPolicy ? "§" : m.init}</div>
       <div style={{ minWidth: 0 }}>
         <div className="row" style={{ gap: 6 }}>
           <span className={`chip ${verdict === "CALL" ? "call" : verdict === "WATCH" ? "watch" : "policy"}`}>{verdict === "CALL" ? "CALL THIS WEEK" : verdict}</span>
-          <span className="chip" style={{ color: SIGNAL[i.signal].color }}>{SIGNAL[i.signal].label}</span>
+          <span className="chip sig" style={{ color: SIGNAL[i.signal].color }}>
+            {SIGNAL_ICON[i.signal] ? SIGNAL_ICON[i.signal]({ size: 13 }) : null}
+            {SIGNAL[i.signal].label}
+          </span>
           <Flags i={i} />
         </div>
         <div className="headline">{i.headline}</div>
         <div className="tags">
           {i.company && <span className="tag"><b>{i.company}</b></span>}
           {i.sector && <span className="tag">{i.sector}</span>}
-          {i.geo && <span className="tag">📍 {i.geo}</span>}
-          {i.amount_inr_crore != null && <span className="tag">₹{i.amount_inr_crore} crore</span>}
-          {i.beneficiaries && <span className="tag">👥 {i.beneficiaries}</span>}
-          {i.deadline && <span className="tag">⏰ {i.deadline}</span>}
+          {i.geo && <span className="tag"><IconPin />{i.geo}</span>}
+          {i.amount_inr_crore != null && <span className="tag money"><IconRupee />{i.amount_inr_crore} crore</span>}
+          {i.beneficiaries && <span className="tag"><IconUsers />{i.beneficiaries}</span>}
+          {i.deadline && <span className="tag due"><IconClock />{i.deadline}</span>}
         </div>
         {isPolicy ? (
           <p className="ctx">{(i as Policy).note}</p>
@@ -122,7 +127,7 @@ function ItemCard({ d, i, sigs, compact }: { d: Digest; i: DigestItem | Policy; 
             </div>
           </>
         )}
-        <blockquote className="ev">“{i.evidence}”</blockquote>
+        <blockquote className="ev"><span className="q"><IconQuote /></span>{i.evidence}</blockquote>
         <Source i={i} now={d.generatedAt} />
         {!isPolicy && sigs[i.id] && <FeedbackButtons d={d.id} i={i.id} sigs={sigs[i.id]} />}
       </div>
@@ -185,7 +190,8 @@ export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: S
   return (
     <>
       <section className="hero">
-        <div className="wrap">
+        <div className="wrap hero-grid">
+          <div className="hero-main">
           <div className="hero-top">
             <div>
               <div className="eyebrow">Weekly CSR digest · {d.week}</div>
@@ -208,6 +214,12 @@ export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: S
             <div className="tile policy"><div className="n">{d.policy.length}</div><div className="l">Policy updates</div></div>
             <div className="tile"><div className="n">{s.fetched}</div><div className="l">Articles scanned</div></div>
           </div>
+          </div>
+          {all.length > 0 && (
+            <div className="hero-radar">
+              <RadarChart items={all} />
+            </div>
+          )}
         </div>
       </section>
 
@@ -238,7 +250,7 @@ export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: S
               </div>
             ) : (
               <>
-                <h2>🟢 Call this week <span className="count">{call.length}</span></h2>
+                <h2><span className="sh call" />Call this week <span className="count">{call.length}</span></h2>
                 {call.length ? call.map((i) => <ItemCard key={i.id} d={d} i={i} sigs={sigs} />) : (
                   <div className="panel muted">
                     Nothing reached CALL this week{signal !== "ALL" || sector !== "ALL" || q ? " for this filter" : ""}. A CALL needs a strong, verified signal in a focus sector, ideally in Pune or Maharashtra. Check the watch list below.
@@ -249,13 +261,13 @@ export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: S
                 )}
                 {watch.length > 0 && (
                   <>
-                    <h2>🟡 Watch <span className="count">{watch.length}</span></h2>
+                    <h2><span className="sh watch" />Watch <span className="count">{watch.length}</span></h2>
                     {watch.map((i) => <ItemCard key={i.id} d={d} i={i} sigs={sigs} compact />)}
                   </>
                 )}
                 {policy.length > 0 && (
                   <>
-                    <h2>🏛 Policy watch <span className="count">{policy.length}</span></h2>
+                    <h2><span className="sh policy" />Policy watch <span className="count">{policy.length}</span></h2>
                     {policy.map((i) => <ItemCard key={i.id} d={d} i={i} sigs={sigs} compact />)}
                   </>
                 )}
