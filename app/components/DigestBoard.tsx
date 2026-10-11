@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { Digest, DigestItem } from "@/lib/types";
-import { EmailDigestButton, FeedbackButtons, RunNowButton } from "./ClientBits";
+import { AccessBadge, EmailDigestButton, FeedbackButtons, RunNowButton } from "./ClientBits";
 import { RadarChart } from "./RadarChart";
 import { IconClock, IconPin, IconQuote, IconRupee, IconUsers, SIGNAL_ICON } from "./Icons";
 
@@ -203,6 +203,7 @@ export function DigestBoard({ d, sigs, showRun, sampleId }: { d: Digest; sigs: S
                 <span className="pill">⏱ Next run {nextMonday(d.generatedAt)}</span>
                 <span className="pill"><a href={`/api/email-preview?id=${d.id}`} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>👁 Preview email ↗</a></span>
                 <EmailDigestButton digestId={d.id} />
+                <AccessBadge />
               </div>
             </div>
             {showRun && <RunNowButton hero />}

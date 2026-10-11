@@ -14,9 +14,32 @@ export function setToken(t: string) {
   try {
     if (t) localStorage.setItem(TOKEN_KEY, t);
     else localStorage.removeItem(TOKEN_KEY);
+    window.dispatchEvent(new Event("csr-token"));
   } catch {
     /* private mode */
   }
+}
+
+/** Shows whether this browser is in Admin or Guest mode, and lets you switch. */
+export function AccessBadge() {
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    const sync = () => setAdmin(!!getToken());
+    sync();
+    window.addEventListener("csr-token", sync);
+    window.addEventListener("storage", sync);
+    return () => {
+      window.removeEventListener("csr-token", sync);
+      window.removeEventListener("storage", sync);
+    };
+  }, []);
+  return admin ? (
+    <button className="pill pill-btn" title="This browser has the admin token saved" onClick={() => setToken("")}>
+      🔓 Admin mode · switch to guest
+    </button>
+  ) : (
+    <span className="pill" title="Actions ask for the admin token, or let you continue as a guest">👤 Guest mode</span>
+  );
 }
 
 export function Toast({ msg, onDone }: { msg: string | null; onDone: () => void }) {
