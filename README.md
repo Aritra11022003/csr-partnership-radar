@@ -38,7 +38,7 @@ Vercel Cron (Mon 01:30 UTC = 07:00 IST) ─┐        ┌─ "Run now" (ADMIN_TO
                                          ▼        ▼
                                    /api/run  (maxDuration 300 s)
  ┌──────────────────────────────────────────────────────────────────────────────┐
- │ 3  load config + memory   (Upstash Redis → fallback seed/*.json)            │
+ │ 3  load config + memory   (Neon Postgres → fallback seed/*.json)            │
  │ 4  fetch live, parallel   Google News RSS · GDELT · India CSR · CSR Journal │
  │                           PIB · NewsAPI(opt)   — allSettled, 10 s timeouts   │
  │ 5  clean (code)           normalise → IST 7-day window → dedupe → seen-URLs  │
@@ -58,14 +58,14 @@ Vercel Cron (Mon 01:30 UTC = 07:00 IST) ─┐        ┌─ "Run now" (ADMIN_TO
 The LLM does two things only: **read meaning** (classify and extract) and **write prose**. Dates, dedupe, relevance gates, evidence checks, scoring, verdicts, link checks and the final facts are all deterministic code.
 
 ### Stack
-Next.js 15 (App Router, TypeScript) on Vercel · `@google/genai` (Gemini Flash, JSON mode + `responseSchema`) · `zod` · `rss-parser` · Upstash Redis (REST) · Resend · Vitest.
+Next.js 15 (App Router, TypeScript) on Vercel · `@google/genai` (Gemini Flash, JSON mode + `responseSchema`) · `zod` · `rss-parser` · Neon Postgres (serverless driver) · Resend · Vitest.
 
 ### Repository layout
 ```
 app/
   page.tsx                 latest digest + "Run now"
   digest/ , digest/[date]  archive + past digests
-  settings/                sectors, geos, watchlist, weights, recipients (saved to Redis)
+  settings/                sectors, geos, watchlist, weights, recipients (saved to Postgres)
   how-it-works/            map, pipeline, guardrails
   api/run                  cron (CRON_SECRET) + manual (ADMIN_TOKEN)
   api/feedback             HMAC-signed 👍/👎/📞 links
@@ -149,12 +149,12 @@ npm run run:local               # full live pipeline → out/digest.json, out/em
 npm run run:local -- --demo     # live + DEMO fixtures
 npm run dev                     # dashboard on http://localhost:3000
 ```
-Without Upstash credentials the app uses a local JSON file store in `.data/`. Without `GEMINI_API_KEY` the conservative rule-based classifier runs (it never produces CALL) and the template writer is used.
+Without `DATABASE_URL` the app uses a local JSON file store in `.data/`. Without `GEMINI_API_KEY` the conservative rule-based classifier runs (it never produces CALL) and the template writer is used.
 
 ## Deploy (Vercel)
 
 1. Import the GitHub repo in Vercel (framework: Next.js).
-2. **Storage → Marketplace → Upstash for Redis** → connect to the project. This injects `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_*`); both names are supported.
+2. Set `DATABASE_URL` to a Neon Postgres connection string. The app creates its own `csr_radar` schema on first use, so it can share a database safely.
 3. Set env vars: `GEMINI_API_KEY`, `GEMINI_MODEL` (e.g. `gemini-3.8-flash`), `CRON_SECRET`, `ADMIN_TOKEN`, `RESEND_API_KEY`, `DIGEST_FROM_EMAIL`, `DIGEST_TO_EMAILS`, optional `APP_BASE_URL`, `NEWSAPI_KEY`.
 4. Deploy. `vercel.json` registers the cron `30 1 * * 1` (07:00 IST Monday). Vercel sends `Authorization: Bearer $CRON_SECRET`.
 5. Smoke test: open `/api/health`, then press **Run now** on `/` (enter `ADMIN_TOKEN`).
@@ -162,7 +162,7 @@ Without Upstash credentials the app uses a local JSON file store in `.data/`. Wi
 
 ## Configure
 
-Everything Ananya would want to change is in **`/settings`**, saved to Redis and used by the next run:
+Everything Ananya would want to change is in **`/settings`**, saved to Postgres and used by the next run:
 sectors and keywords (add, disable, edit) · geographies, tiers and aliases · watchlist · signal trigger phrases · signal weights · thresholds · penalty · recipients · look-back window. The settings page also lists the exact search queries the next run will use.
 
 ---

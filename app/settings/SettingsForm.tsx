@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { AppConfig } from "@/lib/types";
-import { askToken, setToken, Toast } from "../components/ClientBits";
+import { AdminDialog, getToken, setToken, Toast } from "../components/ClientBits";
 
 const list = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
 const join = (a: string[]) => a.join(", ");
@@ -14,6 +14,7 @@ export function SettingsForm() {
   const [msg, setMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [watchText, setWatchText] = useState("");
+  const [ask, setAsk] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
@@ -33,9 +34,15 @@ export function SettingsForm() {
     setCfg(c);
   };
 
-  async function save() {
-    const token = askToken();
-    if (!token || !cfg) return;
+  function save() {
+    const t = getToken();
+    if (t) void doSave(t);
+    else setAsk(true);
+  }
+
+  async function doSave(token: string) {
+    setAsk(false);
+    if (!cfg) return;
     const c = structuredClone(cfg);
     c.watchlist = watchText
       .split("\n")
@@ -52,6 +59,7 @@ export function SettingsForm() {
     }
     const j = await res.json();
     if (!res.ok) return setMsg(`Not saved: ${j.error}`);
+    setToken(token);
     setQueries(j.queries);
     setSource("store");
     setMsg(`Saved. The next run will use ${j.queries.length} search queries.`);
@@ -189,6 +197,7 @@ export function SettingsForm() {
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 14 }}>
         <button className="btn primary" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save settings"}</button>
       </div>
+      {ask && <AdminDialog purpose="Save these settings. They change next run's search queries and scores." onClose={() => setAsk(false)} onToken={doSave} />}
       <Toast msg={msg} onDone={() => setMsg(null)} />
     </div>
   );

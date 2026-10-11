@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 const STEPS: [string, string, string][] = [
-  ["1", "Ananya sets her focus", "Sectors, geographies, watchlist and weights in /settings — saved to Redis, validated with zod."],
+  ["1", "Ananya sets her focus", "Sectors, geographies, watchlist and weights in /settings — saved to Postgres, validated with zod."],
   ["2", "Cron: Monday 07:00 IST", "Vercel Cron `30 1 * * 1` calls /api/run with CRON_SECRET. A per-ISO-week lock stops double runs; “Run now” uses ADMIN_TOKEN."],
   ["3", "Load config + memory", "Saved settings (fallback: seed files), seen-URL hashes (30 days) and feedback history."],
   ["4", "Pull the last 7 days (live)", "Google News RSS (one query per sector × signal, plus geo, policy and watchlist queries), GDELT DOC 2.0, India CSR + The CSR Journal feeds, PIB, optional NewsAPI — in parallel, 10 s timeout each, a dead source is skipped and logged."],
@@ -10,7 +10,7 @@ const STEPS: [string, string, string][] = [
   ["7", "Verify & score (code)", "Evidence must be a verbatim substring of the source. Deterministic score = signal + sector + geo tier + recency + watchlist + source credibility − unverified penalty ± feedback. Hard rules: confidence < 0.6, unverified evidence, or injection → never CALL."],
   ["8", "Write the digest (Gemini Flash)", "Headline, 2–3 line context, why now, pitch angle. It receives only verified facts and cannot change verdicts, scores, amounts, dates or URLs — code re-attaches those."],
   ["9", "Output check (code)", "Rejects any writer text with unknown names, numbers or amounts not in the source, URLs, emails or phone numbers → falls back to a deterministic template for that item."],
-  ["10", "Save the week", "Digest, items, skipped list with reasons, source health, seen URLs and run log in Upstash Redis."],
+  ["10", "Save the week", "Digest, items, skipped list with reasons, source health, seen URLs and run log in Neon Postgres."],
   ["11", "Monday email", "Resend → Ananya only. Call / Watch / Policy Watch; a quiet week sends a short “no strong signals” note."],
   ["12", "Ananya decides", "👍 / 👎 / 📞 Called links (HMAC-signed) feed a bounded per-company score nudge next week. The system never contacts companies."],
 ];
@@ -32,7 +32,7 @@ const GUARDS: [string, string][] = [
 
 export default function How() {
   return (
-    <>
+    <div className="wrap page">
       <h1>How it works</h1>
       <p className="sub">AI reads meaning, code checks facts, Ananya makes the call. Full write-up in the <a href="https://github.com/Aritra11022003/csr-partnership-radar" target="_blank" rel="noreferrer">README</a> and <span className="code">COMPONENTS_MAP.md</span>.</p>
       <h2>Components map</h2>
@@ -62,6 +62,6 @@ export default function How() {
       <h2>Out of scope (the cut)</h2>
       <p className="muted">No auto-outreach to companies. No paywalled full-text scraping (only public headlines, feed snippets and meta descriptions). No personal contact harvesting.</p>
       <p><Link href="/">← Back to the latest digest</Link></p>
-    </>
+    </div>
   );
 }

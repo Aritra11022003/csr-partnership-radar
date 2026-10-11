@@ -1,14 +1,15 @@
 /**
  * Tiny key-value store abstraction.
- *  - Upstash Redis over its REST API when UPSTASH_REDIS_REST_URL / KV_REST_API_URL is set (production).
- *  - Otherwise a JSON file in .data/ (local dev) or /tmp (serverless without Redis: ephemeral, warns).
- * Kept dependency-free on purpose: Upstash REST is just HTTPS + a bearer token.
+ *  - Neon Postgres (serverless HTTP driver) when DATABASE_URL is set — production. Everything lives in its own
+ *    `csr_radar` schema, so it can share a database with other apps without touching their tables.
+ *  - Otherwise a JSON file in .data/ (local dev) or /tmp (serverless without a DB: ephemeral, warns).
  */
 import fs from "node:fs";
 import path from "node:path";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 export interface Store {
-  kind: "upstash" | "file" | "memory";
+  kind: "neon" | "file" | "memory";
   get<T>(key: string): Promise<T | null>;
   set(key: string, value: unknown, ttlSeconds?: number): Promise<void>;
   /** Set only if absent. Returns true if the key was set. */
@@ -22,76 +23,95 @@ export interface Store {
   msetWithTtl(entries: [string, unknown][], ttlSeconds: number): Promise<void>;
 }
 
-/* ----------------------------- Upstash ----------------------------- */
-class UpstashStore implements Store {
-  kind = "upstash" as const;
-  constructor(private url: string, private token: string) {}
+/* ------------------------------- Neon ------------------------------- */
+const SCHEMA_SQL = [
+  `create schema if not exists csr_radar`,
+  `create table if not exists csr_radar.kv (key text primary key, value jsonb not null, expires_at timestamptz, updated_at timestamptz not null default now())`,
+  `create table if not exists csr_radar.list (id bigserial primary key, key text not null, item jsonb not null, created_at timestamptz not null default now())`,
+  `create index if not exists list_key_id on csr_radar.list (key, id desc)`,
+];
 
-  private async cmd(args: (string | number)[]): Promise<unknown> {
-    const res = await fetch(this.url, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(args),
-      cache: "no-store",
-    });
-    const json = (await res.json()) as { result?: unknown; error?: string };
-    if (!res.ok || json.error) throw new Error(`Upstash ${args[0]} failed: ${json.error ?? res.status}`);
-    return json.result;
+class NeonStore implements Store {
+  kind = "neon" as const;
+  private sql: NeonQueryFunction<false, false>;
+  private ready: Promise<void> | null = null;
+  constructor(url: string) {
+    this.sql = neon(url);
   }
-
-  private async pipeline(cmds: (string | number)[][]): Promise<unknown[]> {
-    if (cmds.length === 0) return [];
-    const res = await fetch(`${this.url.replace(/\/$/, "")}/pipeline`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(cmds),
-      cache: "no-store",
+  private init() {
+    this.ready ??= (async () => {
+      for (const q of SCHEMA_SQL) await this.sql.query(q);
+    })().catch((e) => {
+      this.ready = null;
+      throw e;
     });
-    if (!res.ok) throw new Error(`Upstash pipeline failed: ${res.status}`);
-    const json = (await res.json()) as { result?: unknown; error?: string }[];
-    return json.map((r) => r.result);
+    return this.ready;
   }
-
+  private exp(ttl?: number) {
+    return ttl ? new Date(Date.now() + ttl * 1000).toISOString() : null;
+  }
   async get<T>(key: string) {
-    const r = (await this.cmd(["GET", key])) as string | null;
-    return r == null ? null : (JSON.parse(r) as T);
+    await this.init();
+    const r = await this.sql.query(`select value from csr_radar.kv where key = $1 and (expires_at is null or expires_at > now())`, [key]);
+    return (r[0]?.value as T) ?? null;
   }
   async set(key: string, value: unknown, ttl?: number) {
-    const args: (string | number)[] = ["SET", key, JSON.stringify(value)];
-    if (ttl) args.push("EX", ttl);
-    await this.cmd(args);
+    await this.init();
+    await this.sql.query(
+      `insert into csr_radar.kv (key, value, expires_at) values ($1, $2::jsonb, $3)
+       on conflict (key) do update set value = excluded.value, expires_at = excluded.expires_at, updated_at = now()`,
+      [key, JSON.stringify(value), this.exp(ttl)],
+    );
   }
+  /** Atomic: inserts, or takes over an expired key; returns false if a live key already exists. */
   async setNX(key: string, value: unknown, ttl?: number) {
-    const args: (string | number)[] = ["SET", key, JSON.stringify(value), "NX"];
-    if (ttl) args.push("EX", ttl);
-    return (await this.cmd(args)) === "OK";
+    await this.init();
+    const r = await this.sql.query(
+      `insert into csr_radar.kv (key, value, expires_at) values ($1, $2::jsonb, $3)
+       on conflict (key) do update set value = excluded.value, expires_at = excluded.expires_at, updated_at = now()
+       where csr_radar.kv.expires_at is not null and csr_radar.kv.expires_at <= now()
+       returning key`,
+      [key, JSON.stringify(value), this.exp(ttl)],
+    );
+    return r.length > 0;
   }
   async del(key: string) {
-    await this.cmd(["DEL", key]);
+    await this.init();
+    await this.sql.query(`delete from csr_radar.kv where key = $1`, [key]);
   }
   async mget<T>(keys: string[]) {
-    if (keys.length === 0) return [];
-    const out: (T | null)[] = [];
-    for (let i = 0; i < keys.length; i += 500) {
-      const r = (await this.cmd(["MGET", ...keys.slice(i, i + 500)])) as (string | null)[];
-      out.push(...r.map((v) => (v == null ? null : (JSON.parse(v) as T))));
-    }
-    return out;
+    if (!keys.length) return [];
+    await this.init();
+    const r = await this.sql.query(
+      `select key, value from csr_radar.kv where key = any($1::text[]) and (expires_at is null or expires_at > now())`,
+      [keys],
+    );
+    const m = new Map(r.map((x) => [x.key as string, x.value as T]));
+    return keys.map((k) => m.get(k) ?? null);
   }
   async lpush(key: string, value: unknown, maxLen = 500) {
-    await this.pipeline([
-      ["LPUSH", key, JSON.stringify(value)],
-      ["LTRIM", key, 0, maxLen - 1],
-    ]);
+    await this.init();
+    await this.sql.query(`insert into csr_radar.list (key, item) values ($1, $2::jsonb)`, [key, JSON.stringify(value)]);
+    await this.sql.query(
+      `delete from csr_radar.list where key = $1 and id not in (select id from csr_radar.list where key = $1 order by id desc limit $2)`,
+      [key, maxLen],
+    );
   }
   async lrange<T>(key: string, start: number, stop: number) {
-    const r = (await this.cmd(["LRANGE", key, start, stop])) as string[];
-    return r.map((v) => JSON.parse(v) as T);
+    await this.init();
+    const limit = stop === -1 ? 100000 : stop - start + 1;
+    const r = await this.sql.query(`select item from csr_radar.list where key = $1 order by id desc offset $2 limit $3`, [key, start, limit]);
+    return r.map((x) => x.item as T);
   }
   async msetWithTtl(entries: [string, unknown][], ttl: number) {
-    for (let i = 0; i < entries.length; i += 200) {
-      await this.pipeline(entries.slice(i, i + 200).map(([k, v]) => ["SET", k, JSON.stringify(v), "EX", ttl]));
-    }
+    if (!entries.length) return;
+    await this.init();
+    await this.sql.query(
+      `insert into csr_radar.kv (key, value, expires_at)
+       select k, v::jsonb, $3::timestamptz from unnest($1::text[], $2::text[]) as t(k, v)
+       on conflict (key) do update set value = excluded.value, expires_at = excluded.expires_at, updated_at = now()`,
+      [entries.map((e) => e[0]), entries.map((e) => JSON.stringify(e[1])), this.exp(ttl)],
+    );
   }
 }
 
@@ -179,12 +199,11 @@ let _store: Store | null = null;
 
 export function getStore(): Store {
   if (_store) return _store;
-  const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
-  if (url && token) {
-    _store = new UpstashStore(url, token);
+  const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  if (url) {
+    _store = new NeonStore(url);
   } else if (process.env.VERCEL) {
-    console.warn("[store] No Upstash Redis configured on Vercel: using ephemeral /tmp store.");
+    console.warn("[store] No DATABASE_URL configured on Vercel: using ephemeral /tmp store.");
     _store = new FileStore("/tmp/csr-radar-store.json");
   } else {
     _store = new FileStore(path.join(process.cwd(), ".data", "store.json"));

@@ -28,8 +28,8 @@
 <text x="75.0" y="480.0" text-anchor="middle" font-size="10.5" fill="#dfe3f5">(LLM)</text>
 <rect x="150" y="400" width="1100" height="130" fill="#eef2f7"/>
 <rect x="0" y="530" width="148" height="128" fill="#575f8a"/>
-<text x="75.0" y="591.0" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">Upstash Redis</text>
-<text x="75.0" y="610.0" text-anchor="middle" font-size="10.5" fill="#dfe3f5">(Vercel Marketplace)</text>
+<text x="75.0" y="591.0" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">Neon Postgres</text>
+<text x="75.0" y="610.0" text-anchor="middle" font-size="10.5" fill="#dfe3f5">(Database)</text>
 <rect x="150" y="530" width="1100" height="130" fill="#e4e9f1"/>
 <rect x="0" y="660" width="148" height="128" fill="#575f8a"/>
 <text x="75.0" y="721.0" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff">Live Data APIs</text>

@@ -8,7 +8,7 @@ export default async function Archive() {
   const ids = await listDigests().catch(() => []);
   const digests = (await Promise.all(ids.slice(0, 52).map((id) => getDigest(id).catch(() => null)))).filter(Boolean);
   return (
-    <>
+    <div className="wrap page">
       <h1>Past digests</h1>
       <p className="sub">One per run date. Each digest is stored with its items, sources, skipped list and run notes.</p>
       {digests.length === 0 ? (
@@ -32,6 +32,6 @@ export default async function Archive() {
           </table>
         </div>
       )}
-    </>
+    </div>
   );
 }

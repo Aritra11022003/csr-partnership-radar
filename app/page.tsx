@@ -7,21 +7,19 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const d = await getLatestDigest().catch(() => null);
+  if (d) return <DigestView d={d} showRun />;
   return (
-    <>
-      <div className="row spread" style={{ marginBottom: 8 }}>
-        <span className="sub">Latest digest · next scheduled run Monday 07:00 IST</span>
-        <RunNowButton />
+    <section className="hero" style={{ minHeight: 420 }}>
+      <div className="wrap" style={{ textAlign: "center", paddingTop: 30 }}>
+        <div className="eyebrow">CSR Partnership Radar</div>
+        <h1 className="display">Your first digest is one click away</h1>
+        <p className="summary-hero" style={{ margin: "14px auto 22px" }}>
+          Every Monday at 07:00 IST the radar reads the last 7 days of live Indian news, picks out companies seeking NGO partners,
+          launching education or skilling CSR, or raising CSR budgets, and decides what’s worth a call.
+        </p>
+        <RunNowButton hero />
+        <p className="sub" style={{ marginTop: 18 }}><Link href="/how-it-works" style={{ color: "var(--hero-muted)" }}>How it works →</Link></p>
       </div>
-      {d ? (
-        <DigestView d={d} />
-      ) : (
-        <div className="empty">
-          <h1>No digest yet</h1>
-          <p className="sub">Press “Run now” to pull the last 7 days of live CSR news and build this week’s digest, or wait for Monday 07:00 IST.</p>
-          <p className="sub"><Link href="/how-it-works">How it works →</Link></p>
-        </div>
-      )}
-    </>
+    </section>
   );
 }

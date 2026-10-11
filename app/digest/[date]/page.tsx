@@ -12,7 +12,7 @@ export default async function DigestPage({ params }: { params: Promise<{ date: s
   if (!d) notFound();
   return (
     <>
-      <p className="sub"><Link href="/digest">← All digests</Link></p>
+      <div className="wrap" style={{ paddingTop: 14 }}><Link href="/digest" className="sub">← All digests</Link></div>
       <DigestView d={d} />
     </>
   );
