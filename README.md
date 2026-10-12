@@ -34,7 +34,7 @@ Ananya hears about roughly one in three relevant CSR announcements, usually late
 ## Architecture
 
 ```
-Vercel Cron (Mon 01:30 UTC = 07:00 IST) ─┐        ┌─ "Run now" (ADMIN_TOKEN)
+Vercel Cron (Mon 00:30 UTC = 06:00 IST → delivered before 07:00) ─┐        ┌─ "Run now" (ADMIN_TOKEN)
                                          ▼        ▼
                                    /api/run  (maxDuration 300 s)
  ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -156,7 +156,7 @@ Without `DATABASE_URL` the app uses a local JSON file store in `.data/`. Without
 1. Import the GitHub repo in Vercel (framework: Next.js).
 2. Set `DATABASE_URL` to a Neon Postgres connection string. The app creates its own `csr_radar` schema on first use, so it can share a database safely.
 3. Set env vars: `GEMINI_API_KEY`, `GEMINI_MODEL` (e.g. `gemini-3.8-flash`), `CRON_SECRET`, `ADMIN_TOKEN`, `RESEND_API_KEY`, `DIGEST_FROM_EMAIL`, `DIGEST_TO_EMAILS`, optional `APP_BASE_URL`, `NEWSAPI_KEY`.
-4. Deploy. `vercel.json` registers the cron `30 1 * * 1` (07:00 IST Monday). Vercel sends `Authorization: Bearer $CRON_SECRET`.
+4. Deploy. `vercel.json` registers the cron `30 0 * * 1` (06:00 IST Monday; the free plan may fire any time in that hour, so delivery is always before 07:00 IST). Vercel sends `Authorization: Bearer $CRON_SECRET`.
 5. Smoke test: open `/api/health`, then press **Run now** on `/` (enter `ADMIN_TOKEN`).
 6. Resend: with the default `onboarding@resend.dev` sender, Resend only delivers to the account owner's address. To email Ananya, verify a domain and set `DIGEST_FROM_EMAIL`.
 
