@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300; // G18
 
 /**
- * GET  — Vercel Cron (Mon 01:30 UTC = 07:00 IST), Authorization: Bearer CRON_SECRET. Runs once per ISO week (G19).
+ * GET  — Vercel Cron (Mon 00:30 UTC = 06:00 IST, delivered before 07:00), Authorization: Bearer CRON_SECRET. Runs once per ISO week (G19).
  * POST — manual "Run now" from the dashboard, x-admin-token: ADMIN_TOKEN. Body: { sendEmail?, forceEmail?, sample? }.
  *        sample=true builds a separate DEMO digest from the fixtures (no email, never replaces the real week).
  */
